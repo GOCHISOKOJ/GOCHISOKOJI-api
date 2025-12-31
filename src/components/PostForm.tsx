@@ -238,9 +238,9 @@ export function PostForm({
           onChange={(e) => setFormData(prev => ({ ...prev, koji_type: e.target.value }))}
           className="w-full px-4 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary"
         >
-          <option value="中華麹">中華こうじ</option>
-          <option value="コンソメ麹">コンソメこうじ</option>
-          <option value="たまねぎ麹">たまねぎこうじ</option>
+          <option value="中華麹">中華風こうじ調味料</option>
+          <option value="コンソメ麹">コンソメ風こうじ調味料</option>
+          <option value="たまねぎ麹">旨塩風こうじ調味料</option>
         </select>
       </div>
 

@@ -10,6 +10,7 @@ type RequestBody = {
   kojiType?: string; // オプショナル（未選択でも会話可能）
   messages: Array<{ role: 'user' | 'ai'; text: string }>;
   firstTurn?: boolean; // 新規チャット開始後の最初の送信で true（現在は会話モードのみ使用）
+  isQuickRecipeMode?: boolean; // クイックプロンプト経由でメニュー案が送信された場合true
 };
 
 function extractJsonObject(text: string): string | null {
@@ -18,6 +19,21 @@ function extractJsonObject(text: string): string | null {
   const withoutFence = trimmed.replace(/```json\s*/g, '').replace(/```/g, '').trim();
   const match = withoutFence.match(/\{[\s\S]*\}/);
   return match ? match[0] : null;
+}
+
+// Markdown記号を除去してプレーンテキストにする（番号付きリストは保持）
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/\*\*([^*]+)\*\*/g, '$1') // **太字** → 太字
+    .replace(/\*([^*]+)\*/g, '$1')     // *イタリック* → イタリック
+    .replace(/__([^_]+)__/g, '$1')     // __太字__ → 太字
+    .replace(/_([^_]+)_/g, '$1')       // _イタリック_ → イタリック
+    .replace(/~~([^~]+)~~/g, '$1')     // ~~打消し~~ → 打消し
+    .replace(/`([^`]+)`/g, '$1')       // `コード` → コード
+    .replace(/^#+\s*/gm, '')           // # 見出し → 見出し
+    .replace(/^[-*+]\s+/gm, '- ')      // 箇条書きを統一
+    // 番号付きリスト（1. 2. 3.）は保持する（レシピ手順用）
+    .trim();
 }
 
 function formatEvidenceForPrompt(evidence: EvidenceItem[]): string {
@@ -43,9 +59,10 @@ export async function POST(request: NextRequest) {
 
     // kojiTypeは省略可能（未選択でも会話開始可能）
     const kojiType = body?.kojiType?.trim() || '';
+    const isQuickRecipeMode = body?.isQuickRecipeMode === true;
     
     // #region agent log
-    await log('1_request_received', {kojiType,messagesCount:body?.messages?.length,hasKojiType:!!kojiType}, 'A');
+    await log('1_request_received', {kojiType,messagesCount:body?.messages?.length,hasKojiType:!!kojiType,isQuickRecipeMode}, 'A');
     // #endregion
 
     if (!Array.isArray(body?.messages) || body.messages.length === 0) {
@@ -92,7 +109,7 @@ export async function POST(request: NextRequest) {
 
     // システムインストラクション（キャラクター設定 + 会話進行状況 + 人気レシピリスト）
     const popularListStr = popular.map(p => `- ID:${p.id} タイトル:${p.title} こうじ:${p.koji_type}`).join('\n');
-    const baseSystemInstruction = createKojiChatSystemInstruction(kojiType, userMessageCount, popularListStr);
+    const baseSystemInstruction = createKojiChatSystemInstruction(kojiType, userMessageCount, popularListStr, isQuickRecipeMode);
 
     // RAG: 直近のユーザー発話をクエリにして、コーパス+投稿の抜粋を追加
     let evidenceBlock = '';
@@ -111,7 +128,7 @@ export async function POST(request: NextRequest) {
     const systemInstruction = evidenceBlock ? `${baseSystemInstruction}\n\n${evidenceBlock}` : baseSystemInstruction;
 
     // #region agent log
-    await log('2_before_gemini', {model:'gemini-1.5-flash',userMessageCount,messagesCount:geminiMessages.length}, 'B');
+    await log('2_before_gemini', {model:'gemini-3.0-flash',userMessageCount,messagesCount:geminiMessages.length}, 'B');
     // #endregion
 
     // Gemini APIに会話履歴全てを送信（JSON形式で返答とチップを同時生成）
@@ -119,7 +136,7 @@ export async function POST(request: NextRequest) {
       geminiMessages,
       systemInstruction,
       {
-        model: 'gemini-2.0-flash',
+        model: 'gemini-3.0-flash',
         temperature: 0.7,
         maxOutputTokens: 4000,
       }
@@ -273,9 +290,12 @@ export async function POST(request: NextRequest) {
       ? popular.filter(p => recommendedIds.includes(p.id))
       : []; // 関連性がなければ空配列
 
+    // Markdown記号を除去してプレーンテキストに
+    const cleanReply = stripMarkdown(finalReply);
+
     return NextResponse.json({
       success: true,
-      reply: finalReply,
+      reply: cleanReply,
       suggestions,
       shouldShowCreateButton, // レシピ下書き生成を促す段階か
       suggestedKoji, // AIが会話から推測した最適な麹（未選択時用）

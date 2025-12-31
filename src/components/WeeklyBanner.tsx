@@ -29,7 +29,7 @@ function WeeklyBannerSkeleton() {
 
 export function WeeklyBanner({ recipes, onRecipeClick, isLoading = false }: WeeklyBannerProps) {
   return (
-    <div className="border-b border-border bg-background px-4 pt-2 pb-3">
+    <div className="border-b border-border bg-background px-4 pt-1 pb-3">
       <div className="mb-1 flex items-center justify-between">
         <h2 className="text-sm font-semibold">今週のおすすめレシピ</h2>
         <button className="text-xs text-primary hover:underline">

@@ -148,7 +148,7 @@ export async function POST(request: NextRequest) {
     const displayKojiTypes =
       dbKojiTypes.length > 0
         ? dbKojiTypes.map((k) => toKojiDisplayName(k))
-        : ['たまねぎこうじ', '中華こうじ', 'コンソメこうじ'];
+        : ['旨塩風こうじ調味料', '中華風こうじ調味料', 'コンソメ風こうじ調味料'];
 
     // 今月の旬食材候補（AIがここから選ぶ）
     const month = new Date().getMonth() + 1;
@@ -209,10 +209,10 @@ pickedIngredientsにはこの3つだけを入れる（他は入れない）
 ★★★ 1食材=1こうじ=1品 で、「美味しそう！食べたい！」と思える料理名を提案 ★★★
 3つの旬食材を、3つのこうじに1対1で割り当てて、それぞれの「ベストな相性メニュー」を考えてください。
 
-【各こうじの基本特性】
-- たまねぎこうじ: 甘みとコクがあり、和洋問わず使える万能タイプ
-- 中華こうじ: 生姜・にんにくの風味があり、中華系の味付けに合う
-- コンソメこうじ: 野菜の甘みがあり、洋食の味付けに合う
+【各こうじ調味料の基本特性】
+- 旨塩風こうじ調味料: 甘みとコクがあり、和洋問わず使える万能タイプ
+- 中華風こうじ調味料: 生姜・にんにくの風味があり、中華系の味付けに合う
+- コンソメ風こうじ調味料: 野菜の甘みがあり、洋食の味付けに合う
 
 【重要: 食材とこうじの相性を考えて割り当てる】
 - 各こうじの基本特性を活かして、食材に最も合う料理を自由に考えて提案する
@@ -252,7 +252,7 @@ JSONのみ（コードフェンスや説明文なし）:
 }
 `.trim();
 
-    const raw = await generateText(prompt, { model: 'gemini-1.5-flash', temperature: 0.7, maxOutputTokens: 3000 });
+    const raw = await generateText(prompt, { model: 'gemini-3.0-flash', temperature: 0.7, maxOutputTokens: 3000 });
     // #region agent log
     await logSync(
       'intro_raw',
@@ -429,7 +429,7 @@ JSONのみ（コードフェンスや説明文なし）:
     const month = new Date().getMonth() + 1;
     // 旬食材をランダムに再取得
     const p = pickSeasonalIngredientsForNow(3).pickedIngredients.slice(0, 3).sort((a, b) => a.localeCompare(b));
-    const fallbackKojiTypes = ['たまねぎこうじ', '中華こうじ', 'コンソメこうじ'];
+    const fallbackKojiTypes = ['旨塩風こうじ調味料', '中華風こうじ調味料', 'コンソメ風こうじ調味料'];
     
     const fallbackGreeting =
       `こんにちは！\n` +

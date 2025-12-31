@@ -23,9 +23,9 @@ const tabs = [
 
 // 麹タイプフィルター（アイコン付き）
 const KOJI_FILTERS = [
-  { id: 'たまねぎこうじ', label: 'たまねぎ', icon: '🧅' },
-  { id: '中華こうじ', label: '中華', icon: '🥢' },
-  { id: 'コンソメこうじ', label: 'コンソメ', icon: '🍲' },
+  { id: 'たまねぎこうじ', label: '旨塩風', icon: '🧂' },
+  { id: '中華こうじ', label: '中華風', icon: '🥢' },
+  { id: 'コンソメこうじ', label: 'コンソメ風', icon: '🫕' },
 ];
 
 // 相対時間を計算する関数
@@ -223,8 +223,8 @@ export function HomeClient({ recentPosts, popularPosts, canViewPopular = true }:
         />
 
         {/* 検索 & 麹フィルター */}
-        <div className="px-4 pt-3 pb-1">
-          <div className="bg-surface rounded-xl p-3 space-y-2.5 border border-border">
+        <div className="px-4 pt-2">
+          <div className="bg-surface rounded-xl px-4 py-3 border border-border">
             {/* 検索窓 */}
             <div className="relative group">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -252,8 +252,8 @@ export function HomeClient({ recentPosts, popularPosts, canViewPopular = true }:
             </div>
             
             {/* 麹フィルター */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
+            <div className="mt-3">
+              <div className="flex items-center justify-center gap-2">
                 {KOJI_FILTERS.map((koji) => {
                   const isSelected = selectedKojis.has(koji.id);
                   return (
@@ -262,7 +262,7 @@ export function HomeClient({ recentPosts, popularPosts, canViewPopular = true }:
                       type="button"
                       onClick={() => toggleKoji(koji.id)}
                       className={`
-                        flex items-center gap-1 px-2.5 py-1.5 rounded-lg transition-all duration-150
+                        flex items-center gap-1.5 px-4 py-1.5 rounded-lg transition-all duration-150
                         text-xs font-medium whitespace-nowrap
                         ${isSelected
                           ? 'bg-primary text-primary-foreground'
@@ -277,13 +277,15 @@ export function HomeClient({ recentPosts, popularPosts, canViewPopular = true }:
                 })}
               </div>
               {selectedKojis.size > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setSelectedKojis(new Set())}
-                  className="text-xs text-muted-foreground hover:text-primary"
-                >
-                  クリア
-                </button>
+                <div className="flex justify-center mt-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedKojis(new Set())}
+                    className="text-xs text-muted-foreground hover:text-primary"
+                  >
+                    クリア
+                  </button>
+                </div>
               )}
             </div>
           </div>

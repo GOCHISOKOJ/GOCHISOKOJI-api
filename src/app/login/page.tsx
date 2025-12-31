@@ -92,7 +92,7 @@ function LoginContent() {
                 <Leaf className="h-10 w-10 text-primary-foreground" />
               </div>
               <div className="text-center space-y-2">
-                <h1 className="text-2xl">YUTAKA</h1>
+                <h1 className="text-2xl">GOCHISOKOJI</h1>
                 <p className="text-lg text-muted-foreground">
                   麹レシピを、AIと。
                 </p>
@@ -318,7 +318,7 @@ function LoginContent() {
 
         <footer className="p-6 text-center">
           <p className="text-xs text-foreground/60">
-            © 2024 YUTAKA. All rights reserved.
+            © 2024 GOCHISOKOJI. All rights reserved.
           </p>
         </footer>
       </div>

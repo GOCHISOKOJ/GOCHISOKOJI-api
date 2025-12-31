@@ -16,11 +16,11 @@ type QuickReply = { id: string; label: string; text: string };
 
 // AIチャット起動用クイックプロンプト
 const QUICK_PROMPTS = [
-  { label: '5分で簡単レシピ', prompt: '5分で作れる簡単なレシピを教えて' },
-  { label: '材料1つでできる', prompt: '材料1つでできるレシピを教えて' },
-  { label: '主菜（メイン）', prompt: '主菜・メインディッシュのレシピを教えて' },
-  { label: '副菜（サブ）', prompt: '副菜・サブおかずのレシピを教えて' },
-  { label: '汁物', prompt: '汁物・スープのレシピを教えて' },
+  { id: '5分で簡単レシピ', label: '5分で簡単レシピ' },
+  { id: '材料1つでできる', label: '材料1つでできる' },
+  { id: '主菜（メイン）', label: '主菜（メイン）' },
+  { id: '副菜（サブ）', label: '副菜（サブ）' },
+  { id: '汁物', label: '汁物' },
 ];
 
 interface AIChatComposerProps {
@@ -47,6 +47,8 @@ interface AIChatComposerProps {
   onRetryIntro?: () => void;
   onTapExample: (text: string) => void;
   onOpenDrafts: () => void;
+  selectedQuickPrompt?: string | null;
+  onSelectQuickPrompt?: (promptId: string) => void;
 }
 
 export function AIChatComposer({
@@ -73,6 +75,8 @@ export function AIChatComposer({
   onRetryIntro,
   onTapExample,
   onOpenDrafts,
+  selectedQuickPrompt,
+  onSelectQuickPrompt,
 }: AIChatComposerProps) {
   const LOG_URL = 'http://127.0.0.1:7244/ingest/a2183a97-7691-4013-9b1b-c6f1b8ad2750';
   const isBlocked = isThinking || isGeneratingFromChat;
@@ -266,26 +270,16 @@ export function AIChatComposer({
                   type="button"
                   onClick={() => {
                     if (isBlocked) return;
-                    const nextSelected = selectedQuickReplyIds.includes(r.id)
-                      ? selectedQuickReplyIds.filter((id) => id !== r.id)
-                      : [...selectedQuickReplyIds, r.id];
-                    setSelectedQuickReplyIds(nextSelected);
-                    applySelectedRepliesToInput(nextSelected, input);
+                    // チップをタップしたら即座に送信
+                    void handleSend(r.text);
                   }}
                   disabled={isBlocked}
-                  className={`h-9 px-3 rounded-full border text-sm transition-colors ${
-                    selectedQuickReplyIds.includes(r.id)
-                      ? 'border-primary bg-primary/10 text-primary'
-                      : 'border-border bg-background hover:bg-muted text-foreground'
-                  }`}
+                  className="h-9 px-3 rounded-full border border-border bg-background hover:bg-muted text-foreground text-sm transition-colors"
                   aria-label={`提案: ${r.label}`}
                 >
                   {r.label}
                 </button>
               ))}
-            </div>
-            <div className="pt-2 text-xs text-muted-foreground">
-              チップをタップで入力欄に追加（もう一度タップで解除）。送信ボタンでまとめて送信できます
             </div>
           </div>
         )}
@@ -317,110 +311,66 @@ export function AIChatComposer({
         <div className="space-y-4">
           {/* AIに聞いてみる（クイックプロンプト） */}
           <div className="space-y-2">
-            <div className="text-xs text-muted-foreground flex items-center gap-1">
+            <div className="text-xs text-muted-foreground flex items-center gap-1 justify-end">
               <span>💡</span>
               <span>AIに聞いてみる</span>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {QUICK_PROMPTS.map((item) => (
+            <div className="flex flex-wrap gap-2 justify-end">
+              {QUICK_PROMPTS.map((item) => {
+                const isSelected = selectedQuickPrompt === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      if (isBlocked) return;
+                      onSelectQuickPrompt?.(item.id);
+                    }}
+                    disabled={isBlocked}
+                    className={`h-9 px-3 rounded-full border text-sm transition-colors disabled:opacity-50 ${
+                      isSelected
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'border-primary/30 bg-primary/5 text-primary hover:bg-primary/10'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 「例」をタップすると入力欄に転送（クイックプロンプト選択時のみ表示） */}
+          {selectedQuickPrompt && (
+            exampleText ? (
+              <div className="flex justify-end">
                 <button
-                  key={item.label}
                   type="button"
-                  onClick={() => {
-                    if (isBlocked) return;
-                    void onSend(item.prompt);
-                  }}
+                  onClick={() => onTapExample(exampleText)}
                   disabled={isBlocked}
-                  className="h-9 px-3 rounded-full border border-primary/30 bg-primary/5 text-sm text-primary hover:bg-primary/10 transition-colors disabled:opacity-50"
+                  className="max-w-[80%] rounded-2xl border border-dashed border-primary/40 bg-primary/5 px-4 py-3 text-left hover:bg-primary/10 transition-colors"
+                  aria-label="例を入れる"
                 >
-                  {item.label}
+                  <div className="text-xs text-primary font-medium mb-1">💡 タップして送信</div>
+                  <div className="text-sm text-foreground/90 leading-relaxed">{exampleText}</div>
                 </button>
-              ))}
-            </div>
-          </div>
-
-          {/* 使うこうじ（上に配置・横1列） */}
-          <div className="flex justify-end">
-            <div className="space-y-1.5">
-              <div className="text-xs text-muted-foreground text-right">使うこうじ</div>
-              <div className="flex gap-1.5 justify-end">
-                {kojiTypes.map((k) => {
-                  const active = selectedKojiType === k;
-                  // eslint-disable-next-line @typescript-eslint/no-var-requires
-                  const { toKojiDisplayName } = require('@/lib/utils/koji') as typeof import('@/lib/utils/koji');
-                  const label = toKojiDisplayName(k);
-                  return (
-                    <button
-                      key={k}
-                      type="button"
-                      onClick={() => onSelectKojiType(k)}
-                      disabled={isBlocked}
-                      className={`h-8 px-2.5 rounded-full border text-xs font-medium transition-colors whitespace-nowrap ${
-                        active
-                          ? 'border-primary bg-primary text-primary-foreground'
-                          : 'border-border bg-background hover:bg-muted text-foreground'
-                      }`}
-                      aria-label={`こうじを選ぶ: ${label}`}
-                    >
-                      {label}
-                    </button>
-                  );
-                })}
               </div>
-            </div>
-          </div>
-
-          {/* 「例」をタップすると入力欄に転送（右寄り・チャット風） */}
-          {exampleText ? (
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={() => onTapExample(exampleText)}
-                disabled={isBlocked}
-                className="max-w-[80%] rounded-2xl border border-dashed border-primary/40 bg-primary/5 px-4 py-3 text-left hover:bg-primary/10 transition-colors"
-                aria-label="例を入れる"
-              >
-                <div className="text-xs text-primary font-medium mb-1">💡 タップして送信</div>
-                <div className="text-sm text-foreground/90 leading-relaxed">{exampleText}</div>
-              </button>
-            </div>
-          ) : (
-            <div className="flex justify-end">
-              <div
-                className="max-w-[80%] rounded-2xl border border-border bg-surface px-4 py-3 text-left"
-                aria-label={introStatus === 'error' ? '例の生成に失敗' : '例を生成中'}
-                role="group"
-              >
-                {introStatus === 'error' ? (
-                  <div className="space-y-2">
-                    <div className="text-xs text-muted-foreground">例の生成に失敗しました</div>
-                    {introError && <div className="text-sm text-muted-foreground">{introError}</div>}
-                    {onRetryIntro && (
-                      <div className="pt-1">
-                        <button
-                          type="button"
-                          onClick={onRetryIntro}
-                          disabled={isBlocked}
-                          className="h-9 px-3 rounded-full border border-border bg-background hover:bg-muted transition-colors text-sm text-foreground disabled:opacity-60"
-                          aria-label="例を再試行"
-                        >
-                          再試行
-                        </button>
-                      </div>
-                    )}
+            ) : (
+              <div className="flex justify-end">
+                <div
+                  className="max-w-[80%] rounded-2xl border border-border bg-surface px-4 py-3 text-left"
+                  aria-label="メニューを考え中"
+                  role="group"
+                >
+                  <div className="text-xs text-muted-foreground mb-1">AIがメニューを考え中…</div>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <span className="h-2 w-2 rounded-full bg-muted-foreground/60 animate-pulse" />
+                    <span className="h-2 w-2 rounded-full bg-muted-foreground/60 animate-pulse [animation-delay:150ms]" />
+                    <span className="h-2 w-2 rounded-full bg-muted-foreground/60 animate-pulse [animation-delay:300ms]" />
                   </div>
-                ) : (
-                  <>
-                    <div className="text-xs text-muted-foreground mb-1">例を生成中…</div>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <span className="h-2 w-2 rounded-full bg-muted-foreground/60 animate-pulse" />
-                      <span className="h-2 w-2 rounded-full bg-muted-foreground/60 animate-pulse [animation-delay:150ms]" />
-                      <span className="h-2 w-2 rounded-full bg-muted-foreground/60 animate-pulse [animation-delay:300ms]" />
-                    </div>
-                  </>
-                )}
+                </div>
               </div>
-            </div>
+            )
           )}
 
           {/* 下書きから再開 */}

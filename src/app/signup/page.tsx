@@ -287,7 +287,7 @@ export default function SignupPage() {
 
         <footer className="p-6 text-center">
           <p className="text-xs text-foreground/60">
-            © 2024 YUTAKA. All rights reserved.
+            © 2024 GOCHISOKOJI. All rights reserved.
           </p>
         </footer>
       </div>

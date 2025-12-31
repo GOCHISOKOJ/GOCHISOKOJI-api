@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "YUTAKA - 麹レシピをAIと",
+  title: "GOCHISOKOJI - 麹レシピをAIと",
   description: "AIと一緒に麹レシピを作成・共有できるアプリ",
 };
 

@@ -16,7 +16,7 @@ export function AIGenerateForm({ onRecipeGenerated }: AIGenerateFormProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState('');
 
-  const kojiTypes = ['中華こうじ', 'コンソメこうじ', 'たまねぎこうじ'];
+  const kojiTypes = ['中華風こうじ調味料', 'コンソメ風こうじ調味料', '旨塩風こうじ調味料'];
   const difficulties = ['かんたん', 'ふつう', 'むずかしい'];
 
   const handleGenerate = async () => {

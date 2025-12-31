@@ -106,6 +106,7 @@ function ComposePageContent() {
   const [introPickedIngredients, setIntroPickedIngredients] = React.useState<string[] | null>(null);
   const [introStatus, setIntroStatus] = React.useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [introError, setIntroError] = React.useState<string | null>(null);
+  const [selectedQuickPrompt, setSelectedQuickPrompt] = React.useState<string | null>(null);
   const [isChatThinking, setIsChatThinking] = React.useState(false);
   const [chatSuggestions, setChatSuggestions] = React.useState<
     Array<{ label: string; text: string }> | undefined
@@ -119,17 +120,76 @@ function ComposePageContent() {
   const handleSelectKojiType = React.useCallback(
     (v: string) => {
       setSelectedKojiType(v);
-      // 例は選択と同時に更新（体感の遅延/ズレ防止）
-      const displayKoji = toKojiDisplayName(v);
-      const ex = introExamples?.[displayKoji];
-      if (ex?.title && ex?.description) {
-        setExampleText(`${ex.title}。${ex.description}`);
-      } else {
-        // 初回例は固定を出さず、AI生成が返るまでローディング表示にする
-        setExampleText(null);
-      }
     },
-    [introExamples]
+    []
+  );
+
+  // 事前生成されたメニュー案（カテゴリ別）
+  const [preGeneratedMenus, setPreGeneratedMenus] = React.useState<
+    Record<string, { menuIdea: string; kojiType: string }> | null
+  >(null);
+  const preGenerateMenusInFlightRef = React.useRef(false);
+
+  // ページ読み込み時に全カテゴリのメニュー案を事前生成
+  React.useEffect(() => {
+    if (mode !== 'chat') return;
+    if (preGeneratedMenus !== null) return; // 既に生成済み
+    if (preGenerateMenusInFlightRef.current) return;
+
+    const loadAllMenuIdeas = async () => {
+      preGenerateMenusInFlightRef.current = true;
+      try {
+        const res = await fetch('/api/quick-menu-idea', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ allCategories: true }),
+        });
+        const json = await res.json().catch(() => null);
+        
+        if (res.ok && json?.success && json?.results) {
+          // 事前生成は「最初に成功した1回」だけを採用（上書きしない）
+          setPreGeneratedMenus((prev) => (prev ? prev : json.results));
+        }
+      } catch (e) {
+        console.error('Failed to pre-generate menu ideas:', e);
+      } finally {
+        preGenerateMenusInFlightRef.current = false;
+      }
+    };
+
+    void loadAllMenuIdeas();
+  }, [mode, preGeneratedMenus]);
+
+  // 事前生成が完了したら、選択中のカテゴリの内容で更新
+  React.useEffect(() => {
+    if (!selectedQuickPrompt) return;
+    if (!preGeneratedMenus) return;
+    
+    const preGenerated = preGeneratedMenus[selectedQuickPrompt];
+    if (preGenerated?.menuIdea) {
+      setExampleText(preGenerated.menuIdea);
+      setIntroStatus('ready');
+    }
+  }, [preGeneratedMenus, selectedQuickPrompt]);
+
+  // クイックプロンプト選択時: 事前生成済みメニューを即座に表示、なければローディング
+  const handleSelectQuickPrompt = React.useCallback(
+    (promptId: string) => {
+      setSelectedQuickPrompt(promptId);
+      
+      // 事前生成済みメニューがあれば即座に表示
+      const preGenerated = preGeneratedMenus?.[promptId];
+      if (preGenerated?.menuIdea) {
+        setExampleText(preGenerated.menuIdea);
+        setIntroStatus('ready');
+        return;
+      }
+      
+      // まだ生成中またはまだ取得できていない場合はローディング表示（APIが完了したら自動更新される）
+      setExampleText(null);
+      setIntroStatus('loading');
+    },
+    [preGeneratedMenus]
   );
 
   // 初回導入（greeting/例）の非同期更新中に、ユーザーが会話を開始したら上書きしないためのガード
@@ -149,6 +209,8 @@ function ComposePageContent() {
   }, [selectedKojiType]);
 
   const loadIntro = React.useCallback(async () => {
+    // こうじ別の例は使わない（カテゴリベースのみ）ため、クイックプロンプト選択中は実行しない
+    if (selectedQuickPrompt) return;
     const requestId = ++introRequestIdRef.current;
     setIntroStatus('loading');
     setIntroError(null);
@@ -260,7 +322,7 @@ function ComposePageContent() {
       setIntroStatus('error');
       setIntroError('例の生成に失敗しました（通信エラー）');
     }
-  }, [KOJI_TYPES]);
+  }, [KOJI_TYPES, selectedQuickPrompt]);
 
   const [drafts, setDrafts] = React.useState<
     Array<Pick<Post, 'id' | 'title' | 'updated_at' | 'created_at'>>
@@ -311,13 +373,11 @@ function ComposePageContent() {
     // まずはローカルで即時に挨拶を表示（ロード直後に空表示になるのを防ぐ）
     const localGreeting = generateSeasonalGreeting({ pickedIngredients: picked });
     setChatMessages([{ id: 'ai-hello', role: 'ai', text: localGreeting }]);
+    // 「タップして送信」のメニュー案はカテゴリ（クイックプロンプト）でのみ生成する
     setIntroExamples(null);
-    // 初回の「例」はAI生成が返るまで固定を出さない
     setExampleText(null);
-    setIntroStatus('loading');
+    setIntroStatus('idle');
     setIntroError(null);
-
-    void loadIntro();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
 
@@ -388,18 +448,8 @@ function ComposePageContent() {
     }
   };
 
-  // 麹タイプが変わるたびに「例」を更新（API不要、ローカルで生成）
-  React.useEffect(() => {
-    if (mode !== 'chat') return;
-    const displayKoji = toKojiDisplayName(selectedKojiType);
-    const ex = introExamples?.[displayKoji];
-    if (ex?.title && ex?.description) {
-      setExampleText(`${ex.title}。${ex.description}`);
-      return;
-    }
-    // 初回例は固定を出さず、AI生成が揃うまでローディング表示
-    setExampleText(null);
-  }, [mode, selectedKojiType, introExamples]);
+  // 麹タイプの例は使用しない（カテゴリベースのみ使用）
+  // exampleTextはクイックプロンプト選択時のみ設定される
 
   // AI生成完了時の処理
   const handleRecipeGenerated = (recipe: GeneratedRecipe) => {
@@ -580,8 +630,18 @@ function ComposePageContent() {
     };
   };
 
+  // クイックプロンプト経由での送信（即レシピモード）
+  const handleChatSendWithQuickRecipeMode = async (text: string) => {
+    return handleChatSendInternal(text, true);
+  };
+
   const handleChatSend = async (overrideText?: string) => {
     const text = (overrideText ?? chatInput).trim();
+    if (!text) return;
+    return handleChatSendInternal(text, false);
+  };
+
+  const handleChatSendInternal = async (text: string, isQuickRecipeMode: boolean) => {
     if (!text) return;
     if (isChatThinking) return;
 
@@ -596,10 +656,11 @@ function ComposePageContent() {
         location: 'src/app/(app)/compose/page.tsx',
         message: 'handleChatSend called',
         data: {
-          source: overrideText ? 'chip' : 'input',
+          source: isQuickRecipeMode ? 'quick-prompt' : 'input',
           textLen: text.length,
           selectedKojiType,
           chatMessagesCount: chatMessages.length,
+          isQuickRecipeMode,
         },
         timestamp: Date.now(),
       }),
@@ -634,6 +695,7 @@ function ComposePageContent() {
         kojiType: selectedKojiType,
         messages: [...chatMessages, userMsg].map((m) => ({ role: m.role, text: m.text })),
         firstTurn: isFirstTurn,
+        isQuickRecipeMode, // クイックプロンプト経由なら即レシピモード
       };
 
       const res = await fetch('/api/chat', {
@@ -907,8 +969,10 @@ function ComposePageContent() {
               introStatus={introStatus}
               introError={introError}
               onRetryIntro={loadIntro}
-              onTapExample={(text) => setChatInput(text)}
+              onTapExample={(text) => handleChatSendWithQuickRecipeMode(text)}
               onOpenDrafts={() => setMode('select')}
+              selectedQuickPrompt={selectedQuickPrompt}
+              onSelectQuickPrompt={handleSelectQuickPrompt}
             />
           )}
 
