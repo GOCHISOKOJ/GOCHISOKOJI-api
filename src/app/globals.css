@@ -1,0 +1,412 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* プライマリ - 温かみのあるゴールド */
+  --primary: #c3923a;
+  --primary-foreground: #ffffff;
+  --primary-gradient: linear-gradient(135deg, #c3923a 0%, #f2c9af 100%);
+
+  /* セカンダリ - 深いブラウン */
+  --secondary: #996231;
+  --secondary-foreground: #ffffff;
+  --secondary-gradient: linear-gradient(135deg, #996231 0%, #f2c9af 100%);
+
+  /* アクセント - 明るいゴールド */
+  --accent: #c39e4d;
+  --accent-foreground: #231815;
+  --accent-gradient: linear-gradient(135deg, #c39e4d 0%, #f2c9af 100%);
+
+  /* アクセント2 - 最も深いブラウン */
+  --accent2: #6a3906;
+  --accent2-foreground: #f2c9af;
+  --accent2-gradient: linear-gradient(135deg, #6a3906 0%, #f2c9af 100%);
+
+  /* 背景 - 温かみのあるベージュ */
+  --background: #F7F1E7;
+  --foreground: #231815;
+  --ink: #231815;
+  --surface: #ffffff;
+  --gray: #9fa0a0;
+  
+  /* カード・ポップオーバー - 白で読みやすく */
+  --card: #ffffff;
+  --card-foreground: #231815;
+  --popover: #ffffff;
+  --popover-foreground: #231815;
+  
+  /* ミュート・ボーダー - 控えめなトーン */
+  --muted: rgba(159, 160, 160, 0.15);
+  --muted-foreground: rgba(35, 24, 21, 0.6);
+  --border: rgba(195, 146, 58, 0.2);
+  
+  /* 危険・破壊的アクション */
+  --destructive: #E94848;
+  --destructive-foreground: #ffffff;
+  --danger: #E94848;
+  
+  /* インプット */
+  --input: transparent;
+  --input-background: #ffffff;
+  --switch-background: rgba(159, 160, 160, 0.3);
+  --ring: #c3923a;
+  
+  /* チャート色 - 温かみのあるパレット */
+  --chart-1: #c3923a;
+  --chart-2: #996231;
+  --chart-3: #c39e4d;
+  --chart-4: #f2c9af;
+  --chart-5: #6a3906;
+  
+  /* サイドバー */
+  --sidebar: #F7F1E7;
+  --sidebar-foreground: #231815;
+  --sidebar-primary: #c3923a;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #ffffff;
+  --sidebar-accent-foreground: #231815;
+  --sidebar-border: rgba(195, 146, 58, 0.2);
+  --sidebar-ring: #c3923a;
+  
+  /* タイポグラフィ - 8ptグリッドシステム */
+  --font-size: 16px;
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-base: 16px;
+  --text-lg: 18px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+  --text-3xl: 28px;
+  --line-height: 1.5;
+  
+  /* フォントウェイト */
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  
+  /* スペーシング - 8ptグリッドシステム */
+  --spacing-1: 4px;
+  --spacing-2: 8px;
+  --spacing-3: 12px;
+  --spacing-4: 16px;
+  --spacing-6: 24px;
+  --spacing-8: 32px;
+  --spacing-12: 48px;
+  
+  /* 角丸 */
+  --radius: 10px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  
+  /* シャドウ - 温かみのあるブラウン系の影 */
+  --shadow-card: 0 2px 8px rgba(35, 24, 21, 0.08);
+  --shadow-sm: 0 1px 4px rgba(35, 24, 21, 0.06);
+  --shadow-md: 0 4px 12px rgba(35, 24, 21, 0.1);
+  --shadow-lg: 0 8px 24px rgba(35, 24, 21, 0.12);
+  
+  /* アクセシビリティ */
+  --min-touch-target: 44px;
+  
+  /* グリッド（モバイル） */
+  --grid-columns: 4;
+  --grid-margin: 16px;
+  --grid-gutter: 12px;
+}
+
+.dark {
+  --background: #231815;
+  --foreground: #F7F1E7;
+  --card: #3d2e28;
+  --card-foreground: #F7F1E7;
+  --popover: #3d2e28;
+  --popover-foreground: #F7F1E7;
+  --primary: #c3923a;
+  --primary-foreground: #231815;
+  --secondary: #c39e4d;
+  --secondary-foreground: #231815;
+  --muted: rgba(247, 241, 231, 0.1);
+  --muted-foreground: rgba(247, 241, 231, 0.6);
+  --accent: #996231;
+  --accent-foreground: #F7F1E7;
+  --destructive: #ff6b6b;
+  --destructive-foreground: #F7F1E7;
+  --border: rgba(195, 146, 58, 0.2);
+  --input: rgba(247, 241, 231, 0.1);
+  --ring: #c3923a;
+  --sidebar: #231815;
+  --sidebar-foreground: #F7F1E7;
+  --sidebar-primary: #c3923a;
+  --sidebar-primary-foreground: #231815;
+  --sidebar-accent: #3d2e28;
+  --sidebar-accent-foreground: #F7F1E7;
+  --sidebar-border: rgba(195, 146, 58, 0.2);
+  --sidebar-ring: #c3923a;
+}
+
+@theme inline {
+  /* カラー */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent2: var(--accent2);
+  --color-accent2-foreground: var(--accent2-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-danger: var(--danger);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-input-background: var(--input-background);
+  --color-switch-background: var(--switch-background);
+  --color-ring: var(--ring);
+  --color-ink: var(--ink);
+  --color-surface: var(--surface);
+  
+  /* チャート */
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  
+  /* 角丸 */
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+  
+  /* サイドバー */
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  
+  /* スペーシング */
+  --spacing-1: var(--spacing-1);
+  --spacing-2: var(--spacing-2);
+  --spacing-3: var(--spacing-3);
+  --spacing-4: var(--spacing-4);
+  --spacing-6: var(--spacing-6);
+  --spacing-8: var(--spacing-8);
+  --spacing-12: var(--spacing-12);
+  
+  /* シャドウ */
+  --shadow-card: var(--shadow-card);
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Noto Sans JP', sans-serif;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Inter', 'Noto Sans JP', sans-serif;
+  }
+  
+  /* アクセシビリティ - 最小タップ領域 */
+  button, 
+  a,
+  input[type="button"],
+  input[type="submit"],
+  input[type="reset"] {
+    min-height: var(--min-touch-target);
+  }
+}
+
+/**
+ * Base typography. This is not applied to elements which have an ancestor with a Tailwind text class.
+ */
+@layer base {
+  :where(:not(:has([class*=' text-']), :not(:has([class^='text-'])))) {
+    h1 {
+      font-size: var(--text-3xl);
+      font-weight: var(--font-weight-semibold);
+      line-height: var(--line-height);
+    }
+
+    h2 {
+      font-size: var(--text-2xl);
+      font-weight: var(--font-weight-semibold);
+      line-height: var(--line-height);
+    }
+
+    h3 {
+      font-size: var(--text-xl);
+      font-weight: var(--font-weight-medium);
+      line-height: var(--line-height);
+    }
+
+    h4 {
+      font-size: var(--text-lg);
+      font-weight: var(--font-weight-medium);
+      line-height: var(--line-height);
+    }
+
+    p {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-normal);
+      line-height: var(--line-height);
+    }
+
+    label {
+      font-size: var(--text-sm);
+      font-weight: var(--font-weight-medium);
+      line-height: var(--line-height);
+    }
+
+    button {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-medium);
+      line-height: var(--line-height);
+    }
+
+    input, textarea, select {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-normal);
+      line-height: var(--line-height);
+    }
+  }
+}
+
+html {
+  font-size: var(--font-size);
+}
+
+/* カスタムユーティリティクラス */
+@layer utilities {
+  .shadow-card {
+    box-shadow: var(--shadow-card);
+  }
+  
+  .shadow-soft {
+    box-shadow: var(--shadow-sm);
+  }
+  
+  .shadow-medium {
+    box-shadow: var(--shadow-md);
+  }
+  
+  .shadow-strong {
+    box-shadow: var(--shadow-lg);
+  }
+  
+  .text-ink {
+    color: var(--ink);
+  }
+  
+  .bg-surface {
+    background-color: var(--surface);
+  }
+  
+  /* グラデーションユーティリティ */
+  .bg-primary-gradient {
+    background: var(--primary-gradient);
+  }
+  
+  .bg-secondary-gradient {
+    background: var(--secondary-gradient);
+  }
+  
+  .bg-accent-gradient {
+    background: var(--accent-gradient);
+  }
+  
+  .bg-accent2-gradient {
+    background: var(--accent2-gradient);
+  }
+  
+  .text-gray {
+    color: var(--gray);
+  }
+  
+  .bg-gray {
+    background-color: var(--gray);
+  }
+  
+  .border-gray {
+    border-color: var(--gray);
+  }
+  
+  /* ログイン画面専用ユーティリティ */
+  .bg-login-gradient {
+    background: var(--login-gradient);
+  }
+  
+  .bg-login-gradient-primary {
+    background: var(--login-gradient-primary);
+  }
+  
+  .bg-login-surface {
+    background-color: var(--login-surface);
+  }
+  
+  .bg-login-surface-warm {
+    background-color: var(--login-surface-warm);
+  }
+  
+  .text-login-primary {
+    color: var(--login-primary);
+  }
+  
+  .bg-login-primary {
+    background-color: var(--login-primary);
+  }
+  
+  .text-login-accent {
+    color: var(--login-accent);
+  }
+  
+  .shadow-login-warm {
+    box-shadow: var(--login-shadow-warm);
+  }
+  
+  /* スクロールバー非表示 */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* 文字サイズ設定 */
+html.font-small {
+  font-size: 14px;
+}
+
+html.font-medium {
+  font-size: 16px;
+}
+
+html.font-large {
+  font-size: 18px;
+}

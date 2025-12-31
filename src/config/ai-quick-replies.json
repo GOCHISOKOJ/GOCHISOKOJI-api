@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "id": "base",
+      "when": { "any": true },
+      "replies": [
+        { "id": "taste_mild", "label": "辛さ控えめ", "text": "辛さ控えめでお願いします。" },
+        { "id": "taste_spicy", "label": "しっかり辛め", "text": "しっかり辛めにしたいです。" },
+        { "id": "kid_friendly", "label": "子ども向け", "text": "子どもでも食べやすい味にしたいです。" },
+        { "id": "quick", "label": "時短", "text": "時短で作れる手順にしたいです。" },
+        { "id": "make_ahead", "label": "作り置き", "text": "作り置きできるように保存方法と日持ちも知りたいです。" }
+      ]
+    },
+    {
+      "id": "chuka",
+      "when": { "kojiType": "中華麹" },
+      "replies": [
+        { "id": "dish_yodaredori", "label": "よだれ鶏", "text": "中華麹でよだれ鶏を作りたいです。" },
+        { "id": "dish_mapo", "label": "麻婆", "text": "中華麹で麻婆（豆腐/なす）を作りたいです。" },
+        { "id": "ingredient_chicken", "label": "鶏むね", "text": "鶏むね肉を使いたいです。" },
+        { "id": "ingredient_tofu", "label": "豆腐", "text": "豆腐を使いたいです。" },
+        { "id": "ingredient_nasu", "label": "なす", "text": "なすを使いたいです。" },
+        { "id": "ingredient_moyashi", "label": "もやし", "text": "もやしを使いたいです。" }
+      ]
+    },
+    {
+      "id": "consomme",
+      "when": { "kojiType": "コンソメ麹" },
+      "replies": [
+        { "id": "dish_potofu", "label": "ポトフ", "text": "コンソメ麹でポトフを作りたいです。" },
+        { "id": "dish_soup", "label": "スープ", "text": "コンソメ麹で野菜スープを作りたいです。" },
+        { "id": "ingredient_carrot", "label": "にんじん", "text": "にんじんを使いたいです。" },
+        { "id": "ingredient_cabbage", "label": "キャベツ", "text": "キャベツを使いたいです。" },
+        { "id": "ingredient_potato", "label": "じゃがいも", "text": "じゃがいもを使いたいです。" }
+      ]
+    },
+    {
+      "id": "onion",
+      "when": { "kojiType": "玉ねぎ麹" },
+      "replies": [
+        { "id": "dish_salad", "label": "サラダ", "text": "玉ねぎ麹でサラダ（ドレッシング）を作りたいです。" },
+        { "id": "dish_marinade", "label": "マリネ", "text": "玉ねぎ麹でマリネを作りたいです。" },
+        { "id": "ingredient_tomato", "label": "トマト", "text": "トマトを使いたいです。" },
+        { "id": "ingredient_lettuce", "label": "レタス", "text": "レタスを使いたいです。" },
+        { "id": "ingredient_chicken", "label": "鶏肉", "text": "鶏肉を使いたいです。" }
+      ]
+    }
+  ]
+}
+
+
