@@ -76,8 +76,8 @@ function getCategoryRule(category: string): CategoryRule {
     case '材料1つでできる':
       return {
         mustIncludeAny: [/材料1つ/, /だけ/],
-        mustNotInclude: [/と[^ろ]/], // 「と」で複数食材を繋いでいないかチェック（「とろ〜」は除外）
-        mustNotInclude: [/、.+、/, /と.+と/],
+        // 「と」で複数食材を繋いでいないかチェック（「とろ〜」は除外）
+        mustNotInclude: [/と[^ろ]/, /、.+、/, /と.+と/],
         titleMustIncludeAny: titlePatterns,
       };
     case '主菜（メイン）':
