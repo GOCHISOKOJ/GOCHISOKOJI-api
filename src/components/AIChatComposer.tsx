@@ -211,7 +211,7 @@ export function AIChatComposer({
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-full border-2 border-border border-t-primary animate-spin" />
               <div className="space-y-1">
-                <div className="text-base font-bold text-foreground">レシピを作成中…</div>
+                <div className="text-base font-bold text-foreground">レシピを考案中…</div>
                 <div className="text-sm text-muted-foreground">少し待ってね</div>
               </div>
             </div>
@@ -262,20 +262,24 @@ export function AIChatComposer({
         )}
 
         {shouldShowQuickReplies && quickReplies.length > 0 && (
-          <div className="pl-11">
-            <div className="flex flex-wrap gap-2">
+          <div className="flex justify-end pr-2">
+            <div className="flex flex-wrap gap-2 justify-end">
               {quickReplies.map((r) => (
                 <button
                   key={r.id}
                   type="button"
                   onClick={() => {
                     if (isBlocked) return;
-                    // チップをタップしたら即座に送信
-                    void handleSend(r.text);
+                    // 「いい感じ、下書きして」の場合はレシピ生成を開始
+                    if (r.text === 'いい感じ、下書きして' && onGenerateDraft) {
+                      onGenerateDraft();
+                    } else {
+                      void handleSend(r.text);
+                    }
                   }}
                   disabled={isBlocked}
-                  className="h-9 px-3 rounded-full border border-border bg-background hover:bg-muted text-foreground text-sm transition-colors"
-                  aria-label={`提案: ${r.label}`}
+                  className="h-9 px-4 rounded-full border-2 border-dashed border-primary/40 bg-primary/5 hover:bg-primary/15 hover:border-primary/60 text-primary text-sm font-medium transition-all"
+                  aria-label={`選択: ${r.label}`}
                 >
                   {r.label}
                 </button>

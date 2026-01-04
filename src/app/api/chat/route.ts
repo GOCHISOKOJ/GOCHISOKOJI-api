@@ -246,8 +246,12 @@ export async function POST(request: NextRequest) {
 
     const replyNormalized = reply.replace(/\s+/g, '');
 
-    // 確認用チップ（ステップ3で使用）は長さフィルタをスキップ
-    const confirmationChips = ['はい、作って', 'もう少し考える'];
+    // 確認用チップ（ステップ3、クイックレシピモード）は長さフィルタ・replyチェックをスキップ
+    const confirmationChips = [
+      'はい、作って', 
+      'もう少し考える',
+      'いい感じ、下書きして'
+    ];
     const isConfirmationChip = (c: string) => confirmationChips.includes(c);
     
     chips = chips

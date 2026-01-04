@@ -15,7 +15,6 @@ export default function ProfileSettingsPage() {
   
   const [isLoading, setIsLoading] = React.useState(true);
   const [isSaving, setIsSaving] = React.useState(false);
-  const [isIndexingCorpus, setIsIndexingCorpus] = React.useState(false);
   const [userId, setUserId] = React.useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = React.useState<string | null>(null);
   const [displayName, setDisplayName] = React.useState('');
@@ -178,32 +177,6 @@ export default function ProfileSettingsPage() {
     }
   };
 
-  // コーパス再インデックス（RAG）
-  const handleReindexCorpus = async () => {
-    if (isIndexingCorpus) return;
-    try {
-      setIsIndexingCorpus(true);
-      setError('');
-      setSuccess('');
-
-      const res = await fetch('/api/rag/index-corpus', { method: 'POST' });
-      const json = await res.json().catch(() => null);
-      if (!res.ok) {
-        const msg = (json as any)?.error || 'コーパスの再インデックスに失敗しました。';
-        setError(String(msg));
-        return;
-      }
-
-      setSuccess('コーパスを更新しました。');
-      setTimeout(() => setSuccess(''), 3000);
-    } catch (e) {
-      console.error(e);
-      setError('コーパスの再インデックスに失敗しました。');
-    } finally {
-      setIsIndexingCorpus(false);
-    }
-  };
-
   // アカウント削除
   const handleDeleteAccount = async () => {
     if (!userId) return;
@@ -339,19 +312,6 @@ export default function ProfileSettingsPage() {
             <p className="text-xs text-muted-foreground text-right">{bio.length}/200</p>
           </section>
 
-          {/* 保存ボタン */}
-          <Button
-            size="lg"
-            tone="primary"
-            onClick={handleSaveProfile}
-            disabled={isSaving}
-            className="w-full"
-          >
-            {isSaving ? '保存中...' : '変更を保存'}
-          </Button>
-
-          <hr className="border-border" />
-
           {/* 文字の大きさ */}
           <section className="space-y-2">
             <label className="text-xs font-medium text-foreground">文字の大きさ</label>
@@ -376,24 +336,16 @@ export default function ProfileSettingsPage() {
             </div>
           </section>
 
-          <hr className="border-border" />
-
-          {/* AI設定（RAG） */}
-          <section className="space-y-2">
-            <label className="text-xs font-medium text-foreground">AI設定</label>
-            <p className="text-xs text-muted-foreground">
-              レシピコーパス（画像由来）と公開レシピを根拠として使うための再インデックスです。
-            </p>
-            <Button
-              size="lg"
-              tone="secondary"
-              onClick={handleReindexCorpus}
-              disabled={isIndexingCorpus}
-              className="w-full"
-            >
-              {isIndexingCorpus ? '更新中...' : 'コーパスを再インデックス'}
-            </Button>
-          </section>
+          {/* 保存ボタン */}
+          <Button
+            size="lg"
+            tone="primary"
+            onClick={handleSaveProfile}
+            disabled={isSaving}
+            className="w-full"
+          >
+            {isSaving ? '保存中...' : '変更を保存'}
+          </Button>
 
           <hr className="border-border" />
 
@@ -414,6 +366,22 @@ export default function ProfileSettingsPage() {
             <Trash2 className="h-4 w-4" />
             アカウントを削除
           </button>
+
+          {/* フッター */}
+          <div className="pt-8 pb-4 text-center space-y-2">
+            <p className="text-xs text-muted-foreground">
+              <a href="/terms" className="hover:text-foreground hover:underline transition-colors">
+                利用規約
+              </a>
+              <span className="mx-3">|</span>
+              <a href="/privacy" className="hover:text-foreground hover:underline transition-colors">
+                プライバシーポリシー
+              </a>
+            </p>
+            <p className="text-xs text-muted-foreground/60">
+              © 2025 GOCHISOKOJI
+            </p>
+          </div>
         </main>
 
         {/* 削除確認モーダル */}

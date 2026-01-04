@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Button } from '@/components/Button';
-import { Plus, X } from 'lucide-react';
+import { Plus, X, Camera } from 'lucide-react';
 import type { Ingredient, Step } from '@/lib/types/database';
 
 interface PostFormProps {
@@ -160,224 +160,242 @@ export function PostForm({
     }));
   };
 
+  // 共通の入力フィールドスタイル
+  const inputStyle = "w-full px-4 py-3 rounded-xl bg-surface border border-border/60 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/40 text-base placeholder:text-muted-foreground/50 transition-all shadow-sm";
+  const textareaStyle = "w-full px-4 py-3 rounded-xl bg-surface border border-border/60 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/40 text-base leading-relaxed placeholder:text-muted-foreground/50 transition-all resize-none shadow-sm";
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-6 p-4">
-      {/* 写真（任意） */}
-      <div className="space-y-2">
-        <label className="block text-sm font-medium">写真（任意）</label>
-        <div className="rounded-lg border border-border bg-card overflow-hidden">
-          <div className="aspect-video bg-muted flex items-center justify-center">
-            {imagePreviewUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={imagePreviewUrl} alt="プレビュー" className="h-full w-full object-cover" />
-            ) : formData.image_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={formData.image_url} alt="写真" className="h-full w-full object-cover" />
-            ) : (
-              <div className="text-sm text-muted-foreground">写真を追加すると見栄えが良くなります</div>
-            )}
-          </div>
-          <div className="p-3 flex items-center justify-between gap-3">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => handleImageChange(e.target.files?.[0] ?? null)}
-            />
-            <Button type="button" tone="secondary" onClick={handlePickImage} className="flex-1">
-              写真を選択
-            </Button>
-            <Button
-              type="button"
-              tone="secondary"
-              onClick={handleRemoveImage}
-              disabled={!imagePreviewUrl && !formData.image_url}
-              className="shrink-0"
-            >
-              削除
-            </Button>
-          </div>
+    <form onSubmit={handleSubmit} className="pb-8">
+      {/* 写真セクション */}
+      <div className="relative">
+        <div className="aspect-[16/9] bg-muted/30 flex items-center justify-center overflow-hidden">
+          {imagePreviewUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={imagePreviewUrl} alt="プレビュー" className="h-full w-full object-cover" />
+          ) : formData.image_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={formData.image_url} alt="写真" className="h-full w-full object-cover" />
+          ) : (
+            <div className="text-center">
+              <Camera className="h-12 w-12 text-muted-foreground/40 mx-auto mb-2" />
+              <p className="text-sm text-muted-foreground/60">写真を追加</p>
+            </div>
+          )}
         </div>
-      </div>
-
-      {/* タイトル */}
-      <div>
-        <label className="block text-sm font-medium mb-2">
-          タイトル <span className="text-destructive">*</span>
-        </label>
         <input
-          type="text"
-          value={formData.title}
-          onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-          placeholder="例: 基本の塩麹"
-          className="w-full px-4 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary"
-          required
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => handleImageChange(e.target.files?.[0] ?? null)}
         />
-      </div>
-
-      {/* 説明 */}
-      <div>
-        <label className="block text-sm font-medium mb-2">説明</label>
-        <textarea
-          value={formData.description}
-          onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-          placeholder="このレシピについて説明してください"
-          rows={3}
-          className="w-full px-4 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary resize-none"
-        />
-      </div>
-
-      {/* 麹の種類 */}
-      <div>
-        <label className="block text-sm font-medium mb-2">
-          麹の種類 <span className="text-destructive">*</span>
-        </label>
-        <select
-          value={formData.koji_type}
-          onChange={(e) => setFormData(prev => ({ ...prev, koji_type: e.target.value }))}
-          className="w-full px-4 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary"
-        >
-          <option value="中華麹">中華風こうじ調味料</option>
-          <option value="コンソメ麹">コンソメ風こうじ調味料</option>
-          <option value="たまねぎ麹">旨塩風こうじ調味料</option>
-        </select>
-      </div>
-
-      {/* 難易度 */}
-      <div>
-        <label className="block text-sm font-medium mb-2">難易度</label>
-        <select
-          value={formData.difficulty}
-          onChange={(e) => setFormData(prev => ({ ...prev, difficulty: e.target.value }))}
-          className="w-full px-4 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary"
-        >
-          <option value="かんたん">かんたん</option>
-          <option value="ふつう">ふつう</option>
-          <option value="むずかしい">むずかしい</option>
-        </select>
-      </div>
-
-      {/* 材料 */}
-      <div>
-        <label className="block text-sm font-medium mb-2">材料</label>
-        <div className="space-y-2">
-          {formData.ingredients.map((ingredient, index) => (
-            <div key={index} className="flex gap-2">
-              <input
-                type="text"
-                value={ingredient.name}
-                onChange={(e) => updateIngredient(index, 'name', e.target.value)}
-                placeholder="材料名"
-                className="flex-1 px-4 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-              <input
-                type="text"
-                value={ingredient.amount}
-                onChange={(e) => updateIngredient(index, 'amount', e.target.value)}
-                placeholder="分量"
-                className="w-24 px-4 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-              {formData.ingredients.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => removeIngredient(index)}
-                  className="p-2 rounded-lg hover:bg-muted transition-colors"
-                  aria-label="削除"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              )}
-            </div>
-          ))}
+        <div className="absolute bottom-4 right-4 flex gap-2">
           <button
             type="button"
-            onClick={addIngredient}
-            className="flex items-center gap-2 text-sm text-primary hover:underline"
+            onClick={handlePickImage}
+            className="h-10 px-4 rounded-full bg-surface/90 backdrop-blur-sm text-foreground text-sm font-medium shadow-md hover:bg-surface transition-colors"
           >
-            <Plus className="h-4 w-4" />
-            材料を追加
+            写真を選択
           </button>
-        </div>
-      </div>
-
-      {/* 手順 */}
-      <div>
-        <label className="block text-sm font-medium mb-2">作り方</label>
-        <div className="space-y-3">
-          {formData.steps.map((step, index) => (
-            <div key={index} className="flex gap-2">
-              <span className="flex-shrink-0 h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium mt-1">
-                {index + 1}
-              </span>
-              <textarea
-                value={step.description}
-                onChange={(e) => updateStep(index, e.target.value)}
-                placeholder={`手順${index + 1}`}
-                rows={2}
-                className="flex-1 px-4 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary resize-none"
-              />
-              {formData.steps.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => removeStep(index)}
-                  className="p-2 rounded-lg hover:bg-muted transition-colors self-start"
-                  aria-label="削除"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              )}
-            </div>
-          ))}
-          <button
-            type="button"
-            onClick={addStep}
-            className="flex items-center gap-2 text-sm text-primary hover:underline"
-          >
-            <Plus className="h-4 w-4" />
-            手順を追加
-          </button>
-        </div>
-      </div>
-
-      {/* アクション */}
-      <div className="pt-4">
-        {onSaveDraft ? (
-          <div className="grid grid-cols-2 gap-3">
-            <Button
+          {(imagePreviewUrl || formData.image_url) && (
+            <button
               type="button"
-              size="lg"
-              tone="secondary"
-              disabled={isSubmitting || isSavingDraft}
-              className="w-full"
-              onClick={handleSaveDraft}
+              onClick={handleRemoveImage}
+              className="h-10 w-10 rounded-full bg-surface/90 backdrop-blur-sm text-muted-foreground shadow-md hover:bg-surface hover:text-destructive transition-colors flex items-center justify-center"
             >
-              {isSavingDraft ? '保存中...' : '下書き保存'}
-            </Button>
+              <X className="h-5 w-5" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="px-4 pt-6 space-y-8">
+        {/* タイトル */}
+        <div>
+          <input
+            type="text"
+            value={formData.title}
+            onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+            placeholder="レシピ名を入力"
+            className="w-full text-xl font-bold bg-transparent border-0 border-b-2 border-border/50 focus:border-primary focus:outline-none pb-2 placeholder:text-muted-foreground/40 transition-colors"
+            required
+          />
+        </div>
+
+        {/* 説明 */}
+        <div>
+          <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+            説明
+          </label>
+          <textarea
+            value={formData.description}
+            onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+            placeholder="このレシピについて説明してください"
+            rows={4}
+            className={textareaStyle}
+          />
+        </div>
+
+        {/* 麹の種類と難易度 */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+              麹の種類
+            </label>
+            <select
+              value={formData.koji_type}
+              onChange={(e) => setFormData(prev => ({ ...prev, koji_type: e.target.value }))}
+              className={inputStyle}
+            >
+              <option value="中華麹">中華風こうじ</option>
+              <option value="コンソメ麹">コンソメ風こうじ</option>
+              <option value="たまねぎ麹">旨塩風こうじ</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+              難易度
+            </label>
+            <select
+              value={formData.difficulty}
+              onChange={(e) => setFormData(prev => ({ ...prev, difficulty: e.target.value }))}
+              className={inputStyle}
+            >
+              <option value="かんたん">かんたん</option>
+              <option value="ふつう">ふつう</option>
+              <option value="むずかしい">むずかしい</option>
+            </select>
+          </div>
+        </div>
+
+        {/* 材料 */}
+        <div>
+          <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4">
+            材料
+          </label>
+          <div className="space-y-3">
+            {formData.ingredients.map((ingredient, index) => (
+              <div key={index} className="flex gap-2 items-center group">
+                <div className="flex-1 flex gap-2 p-1 rounded-xl bg-surface border border-border/60 shadow-sm">
+                  <input
+                    type="text"
+                    value={ingredient.name}
+                    onChange={(e) => updateIngredient(index, 'name', e.target.value)}
+                    placeholder="材料名"
+                    className="flex-1 px-3 py-2 bg-transparent border-0 focus:outline-none text-base placeholder:text-muted-foreground/50"
+                  />
+                  <div className="w-px bg-border my-1" />
+                  <input
+                    type="text"
+                    value={ingredient.amount}
+                    onChange={(e) => updateIngredient(index, 'amount', e.target.value)}
+                    placeholder="分量"
+                    className="w-24 px-3 py-2 bg-transparent border-0 focus:outline-none text-base text-right placeholder:text-muted-foreground/50"
+                  />
+                </div>
+                {formData.ingredients.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => removeIngredient(index)}
+                    className="p-2 rounded-full hover:bg-muted transition-all text-muted-foreground hover:text-destructive"
+                    aria-label="削除"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                )}
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={addIngredient}
+              className="flex items-center gap-2 text-sm text-primary font-medium hover:text-primary/80 transition-colors pt-1"
+            >
+              <Plus className="h-4 w-4" />
+              材料を追加
+            </button>
+          </div>
+        </div>
+
+        {/* 手順 */}
+        <div>
+          <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4">
+            作り方
+          </label>
+          <div className="space-y-4">
+            {formData.steps.map((step, index) => (
+              <div key={index} className="flex gap-3 group">
+                <div className="flex-shrink-0 h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-bold mt-3 shadow-sm">
+                  {index + 1}
+                </div>
+                <div className="flex-1">
+                  <textarea
+                    value={step.description}
+                    onChange={(e) => updateStep(index, e.target.value)}
+                    placeholder={`手順${index + 1}を入力してください`}
+                    rows={3}
+                    className={textareaStyle}
+                  />
+                </div>
+                {formData.steps.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => removeStep(index)}
+                    className="p-2 rounded-full hover:bg-muted transition-all text-muted-foreground hover:text-destructive self-start mt-3"
+                    aria-label="削除"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                )}
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={addStep}
+              className="flex items-center gap-2 text-sm text-primary font-medium hover:text-primary/80 transition-colors pt-1"
+            >
+              <Plus className="h-4 w-4" />
+              手順を追加
+            </button>
+          </div>
+        </div>
+
+        {/* アクション */}
+        <div className="pt-6 pb-4">
+          {onSaveDraft ? (
+            <div className="flex gap-3">
+              <Button
+                type="button"
+                size="lg"
+                tone="secondary"
+                disabled={isSubmitting || isSavingDraft}
+                className="flex-1 rounded-full"
+                onClick={handleSaveDraft}
+              >
+                {isSavingDraft ? '保存中...' : '下書き保存'}
+              </Button>
+              <Button
+                type="submit"
+                size="lg"
+                tone="primary"
+                disabled={isSubmitting || isSavingDraft}
+                className="flex-1 rounded-full"
+              >
+                {isSubmitting ? submittingLabel : submitLabel}
+              </Button>
+            </div>
+          ) : (
             <Button
               type="submit"
               size="lg"
               tone="primary"
-              disabled={isSubmitting || isSavingDraft}
-              className="w-full"
+              disabled={isSubmitting}
+              className="w-full rounded-full"
             >
               {isSubmitting ? submittingLabel : submitLabel}
             </Button>
-          </div>
-        ) : (
-          <Button
-            type="submit"
-            size="lg"
-            tone="primary"
-            disabled={isSubmitting}
-            className="w-full"
-          >
-            {isSubmitting ? submittingLabel : submitLabel}
-          </Button>
-        )}
+          )}
+        </div>
       </div>
     </form>
   );
 }
-
-
