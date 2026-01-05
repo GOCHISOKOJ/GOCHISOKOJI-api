@@ -4,6 +4,18 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
+// CORSヘッダー
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+};
+
+// OPTIONS (preflight)
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: corsHeaders });
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { email, password } = await request.json();
@@ -11,14 +23,14 @@ export async function POST(request: NextRequest) {
     if (!email || !password) {
       return NextResponse.json(
         { success: false, error: 'メールアドレスとパスワードを入力してください。' },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       );
     }
 
     if (password.length < 6) {
       return NextResponse.json(
         { success: false, error: 'パスワードは6文字以上で入力してください。' },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       );
     }
 
@@ -44,7 +56,7 @@ export async function POST(request: NextRequest) {
       }
       return NextResponse.json(
         { success: false, error: message },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       );
     }
 
@@ -54,7 +66,7 @@ export async function POST(request: NextRequest) {
         success: true,
         needsEmailConfirmation: true,
         message: '確認メールを送信しました。メールのリンクをクリックして登録を完了してください。',
-      });
+      }, { headers: corsHeaders });
     }
 
     // 即座にログインできた場合（メール確認が不要な設定の場合）
@@ -70,13 +82,12 @@ export async function POST(request: NextRequest) {
         id: data.user?.id,
         email: data.user?.email,
       },
-    });
+    }, { headers: corsHeaders });
   } catch (e: any) {
     console.error('Email signup error:', e);
     return NextResponse.json(
       { success: false, error: 'サーバーエラーが発生しました。' },
-      { status: 500 }
+      { status: 500, headers: corsHeaders }
     );
   }
 }
-
