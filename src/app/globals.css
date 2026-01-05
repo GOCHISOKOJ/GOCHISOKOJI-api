@@ -114,6 +114,7 @@
 
   /* 固定UI（モバイル） */
   --bottom-nav-height: 56px;
+  --safe-area-bottom: env(safe-area-inset-bottom);
   
   /* グリッド（モバイル） */
   --grid-columns: 4;

@@ -100,6 +100,7 @@ export function AIChatComposer({
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   const composerRef = React.useRef<HTMLDivElement | null>(null);
   const keyboard = useKeyboard();
+  const [safeAreaBottomPx, setSafeAreaBottomPx] = React.useState(0);
 
   const lastMsg = messages[messages.length - 1];
   const hasStarted = React.useMemo(() => messages.some((m) => m.role === 'user'), [messages]);
@@ -110,7 +111,20 @@ export function AIChatComposer({
 
   const bottomNavHeightPx = 56; // CSS var --bottom-nav-height と揃える（JSフォールバック）
   const bottomOffsetPx = keyboard.isOpen ? keyboard.offsetPx : 0;
-  const composerBottomPx = keyboard.isOpen ? bottomOffsetPx : bottomOffsetPx + bottomNavHeightPx;
+  const composerBottomPx = keyboard.isOpen ? bottomOffsetPx : bottomOffsetPx + bottomNavHeightPx + safeAreaBottomPx;
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const readSafeBottom = () => {
+      const raw = getComputedStyle(document.documentElement).getPropertyValue('--safe-area-bottom').trim();
+      const n = Number.parseFloat(raw || '0');
+      const next = Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0;
+      setSafeAreaBottomPx((prev) => (prev === next ? prev : next));
+    };
+    readSafeBottom();
+    window.addEventListener('resize', readSafeBottom);
+    return () => window.removeEventListener('resize', readSafeBottom);
+  }, []);
 
   React.useLayoutEffect(() => {
     const el = composerRef.current;
