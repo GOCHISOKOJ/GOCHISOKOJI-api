@@ -5,6 +5,7 @@ import { Plus, ArrowUp, Sparkles } from 'lucide-react';
 import { ChatMessageBubble } from '@/components/ChatMessageBubble';
 import quickRepliesConfig from '@/config/ai-quick-replies.json';
 import { toKojiDisplayName } from '@/lib/utils/koji';
+import { useKeyboard } from '@/lib/hooks/useKeyboard';
 
 export type ChatAttachment =
   | {
@@ -97,12 +98,37 @@ export function AIChatComposer({
   const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
   const cameraInputRef = React.useRef<HTMLInputElement | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+  const composerRef = React.useRef<HTMLDivElement | null>(null);
+  const keyboard = useKeyboard();
 
   const lastMsg = messages[messages.length - 1];
   const hasStarted = React.useMemo(() => messages.some((m) => m.role === 'user'), [messages]);
 
   const [isAttachSheetOpen, setIsAttachSheetOpen] = React.useState(false);
   const [pendingAttachments, setPendingAttachments] = React.useState<ChatAttachment[]>([]);
+  const [composerHeightPx, setComposerHeightPx] = React.useState<number>(0);
+
+  const bottomNavHeightPx = 56; // CSS var --bottom-nav-height と揃える（JSフォールバック）
+  const bottomOffsetPx = keyboard.isOpen ? keyboard.offsetPx : 0;
+  const composerBottomPx = keyboard.isOpen ? bottomOffsetPx : bottomOffsetPx + bottomNavHeightPx;
+
+  React.useLayoutEffect(() => {
+    const el = composerRef.current;
+    if (!el) return;
+    const measure = () => {
+      const h = el.getBoundingClientRect().height;
+      const next = Math.max(0, Math.round(h));
+      setComposerHeightPx((prev) => (prev === next ? prev : next));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // #region agent log
+  fetch(LOG_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'kbd',hypothesisId:'H_compose_dock',location:'src/components/AIChatComposer.tsx:render',message:'composer dock metrics',data:{keyboardOpen:keyboard.isOpen,keyboardOffsetPx:keyboard.offsetPx,composerBottomPx,composerHeightPx},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
 
   const resizeTextarea = React.useCallback(() => {
     const el = textareaRef.current;
@@ -303,7 +329,13 @@ export function AIChatComposer({
       )}
 
       {/* スクロール領域（メッセージ/チップ） */}
-      <div className="flex-1 overflow-y-auto px-4 pt-4 pb-36">
+      <div
+        className="flex-1 overflow-y-auto px-4 pt-4"
+        style={{
+          // 入力バーの高さ + 余白 + bottom分（キーボード or BottomNav）を確保
+          paddingBottom: Math.max(96, composerHeightPx + composerBottomPx + 16),
+        }}
+      >
         <div className="space-y-3">
         {messages.map((m) => (
           <ChatMessageBubble
@@ -482,8 +514,14 @@ export function AIChatComposer({
       </div>
 
       {/* 入力バー（画面下固定 - BottomNav 56px の上） */}
-      <div className="fixed left-1/2 -translate-x-1/2 w-full max-w-[375px] bottom-14 z-40">
-        <div className="px-3 py-2 bg-background/95 backdrop-blur border-t border-border">
+      <div
+        className="fixed left-1/2 -translate-x-1/2 w-full max-w-[375px] z-40"
+        style={{ bottom: composerBottomPx }}
+      >
+        <div
+          ref={composerRef}
+          className="px-3 py-2 bg-background/98 backdrop-blur border-t border-border"
+        >
           {pendingAttachments.length > 0 && (
             <div className="pb-2">
               <div className="flex items-center gap-2">

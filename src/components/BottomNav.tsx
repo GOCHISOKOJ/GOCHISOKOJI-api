@@ -4,6 +4,7 @@ import React from 'react';
 import { Home, Sparkles, User } from 'lucide-react';
 import { cva } from 'class-variance-authority';
 import { useRouter, usePathname } from 'next/navigation';
+import { useKeyboard } from '@/lib/hooks/useKeyboard';
 
 const navItemVariants = cva(
   'flex flex-col items-center justify-center gap-1 h-[56px] flex-1 transition-colors',
@@ -40,6 +41,7 @@ export function BottomNav({
 }: BottomNavProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const keyboard = useKeyboard();
 
   const defaultItems: NavItem[] = [
     {
@@ -74,8 +76,16 @@ export function BottomNav({
 
   const currentActiveId = getActiveId();
 
+  const shouldHideOnComposeWhileTyping = pathname === '/compose' && keyboard.isOpen;
+
+  // #region agent log
+  fetch('http://127.0.0.1:7244/ingest/a2183a97-7691-4013-9b1b-c6f1b8ad2750',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'kbd',hypothesisId:'H_hide_nav',location:'src/components/BottomNav.tsx:render',message:'bottom nav visibility',data:{pathname,keyboardOpen:keyboard.isOpen,hide:shouldHideOnComposeWhileTyping},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+
+  if (shouldHideOnComposeWhileTyping) return null;
+
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background shadow-strong">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background shadow-strong pb-[env(safe-area-inset-bottom)]">
       <div className="flex items-center justify-around max-w-screen-lg mx-auto">
         {navItems.map((item) => (
           <button

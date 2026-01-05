@@ -111,6 +111,9 @@
   
   /* アクセシビリティ */
   --min-touch-target: 44px;
+
+  /* 固定UI（モバイル） */
+  --bottom-nav-height: 56px;
   
   /* グリッド（モバイル） */
   --grid-columns: 4;
