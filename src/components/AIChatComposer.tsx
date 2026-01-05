@@ -6,10 +6,22 @@ import { ChatMessageBubble } from '@/components/ChatMessageBubble';
 import quickRepliesConfig from '@/config/ai-quick-replies.json';
 import { toKojiDisplayName } from '@/lib/utils/koji';
 
+export type ChatAttachment =
+  | {
+      kind: 'image';
+      mimeType: string;
+      /** base64 (no data: prefix) */
+      dataBase64: string;
+      /** for preview */
+      dataUrl: string;
+      name?: string;
+    };
+
 export interface ChatMessage {
   id: string;
   role: 'ai' | 'user';
   text: string;
+  attachments?: ChatAttachment[];
 }
 
 type QuickReply = { id: string; label: string; text: string };
@@ -27,7 +39,7 @@ interface AIChatComposerProps {
   messages: ChatMessage[];
   input: string;
   onInputChange: (v: string) => void;
-  onSend: (text?: string) => void | Promise<void>;
+  onSend: (payload?: { text?: string; attachments?: ChatAttachment[] }) => void | Promise<void>;
   isThinking?: boolean;
   suggestions?: Array<{ label: string; text: string }> | null;
   shouldShowCreateButton?: boolean;
@@ -82,9 +94,67 @@ export function AIChatComposer({
   const isBlocked = isThinking || isGeneratingFromChat;
   const canSend = input.trim().length > 0 && !isBlocked;
   const endRef = React.useRef<HTMLDivElement | null>(null);
+  const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
+  const cameraInputRef = React.useRef<HTMLInputElement | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 
   const lastMsg = messages[messages.length - 1];
   const hasStarted = React.useMemo(() => messages.some((m) => m.role === 'user'), [messages]);
+
+  const [isAttachSheetOpen, setIsAttachSheetOpen] = React.useState(false);
+  const [pendingAttachments, setPendingAttachments] = React.useState<ChatAttachment[]>([]);
+
+  const resizeTextarea = React.useCallback(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = '0px';
+    const next = Math.min(el.scrollHeight, 120);
+    el.style.height = `${next}px`;
+  }, []);
+
+  React.useEffect(() => {
+    resizeTextarea();
+  }, [input, resizeTextarea]);
+
+  const fileToDataUrl = async (file: File): Promise<string> => {
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const toBase64 = (dataUrl: string): { mimeType: string; dataBase64: string } | null => {
+    const m = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+    if (!m) return null;
+    return { mimeType: m[1], dataBase64: m[2] };
+  };
+
+  const addImageFile = React.useCallback(async (file: File) => {
+    if (!file.type.startsWith('image/')) return;
+    const MAX_BYTES = 6 * 1024 * 1024; // 6MB
+    if (file.size > MAX_BYTES) {
+      alert('画像が大きすぎます（6MB以下にしてください）');
+      return;
+    }
+    const dataUrl = await fileToDataUrl(file);
+    const parsed = toBase64(dataUrl);
+    if (!parsed) {
+      alert('画像の読み込みに失敗しました');
+      return;
+    }
+    // まずは1枚のみ
+    setPendingAttachments([
+      {
+        kind: 'image',
+        mimeType: parsed.mimeType,
+        dataBase64: parsed.dataBase64,
+        dataUrl,
+        name: file.name,
+      },
+    ]);
+  }, []);
 
   React.useEffect(() => {
     if (hasStarted) return;
@@ -185,11 +255,11 @@ export function AIChatComposer({
   }, [quickReplies.map((r) => r.id).join('|')]);
 
   const handleSend = React.useCallback(
-    async (text?: string) => {
+    async (payload?: { text?: string; attachments?: ChatAttachment[] }) => {
       // 送信したら選択をクリア
       setSelectedQuickReplyIds([]);
       autoInsertedPrefixRef.current = '';
-      await onSend(text);
+      await onSend(payload);
     },
     [onSend]
   );
@@ -198,8 +268,21 @@ export function AIChatComposer({
     endRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
   }, [messages.length]);
 
+  const handleSubmit = React.useCallback(async () => {
+    if (isBlocked) return;
+    const text = input.trim();
+    const atts = pendingAttachments;
+    if (!text && atts.length === 0) return;
+    setPendingAttachments([]);
+    onInputChange('');
+    await handleSend({
+      text: text || (atts.length ? 'この写真で料理を考えてください。' : ''),
+      attachments: atts.length ? atts : undefined,
+    });
+  }, [handleSend, input, isBlocked, onInputChange, pendingAttachments]);
+
   return (
-    <div className="p-4 space-y-4">
+    <div className="h-full flex flex-col">
       {/* 全画面ローディング（レシピ生成中） */}
       {isGeneratingFromChat && (
         <div
@@ -219,14 +302,16 @@ export function AIChatComposer({
         </div>
       )}
 
-      {/* 1) まずチャット（AIの話しかけ） */}
-      <div className="pt-2 space-y-3">
+      {/* スクロール領域（メッセージ/チップ） */}
+      <div className="flex-1 overflow-y-auto px-4 pt-4 pb-36">
+        <div className="space-y-3">
         {messages.map((m) => (
           <ChatMessageBubble
             key={m.id}
             role={m.role}
             text={m.text}
             aiAvatarSrc={aiAvatarSrc}
+            attachments={m.attachments}
           />
         ))}
 
@@ -238,7 +323,11 @@ export function AIChatComposer({
                 <button
                   key={p.id}
                   type="button"
-                  onClick={() => void onSend(`この「${p.title}」を${p.kojiType}で作ってみたい。材料と手順を簡単に教えて！`)}
+                  onClick={() =>
+                    void handleSend({
+                      text: `この「${p.title}」を${p.kojiType}で作ってみたい。材料と手順を簡単に教えて！`,
+                    })
+                  }
                   disabled={isBlocked}
                   className="w-56 shrink-0 rounded-xl border border-border bg-surface text-left overflow-hidden hover:bg-muted transition-colors"
                   aria-label={`人気: ${p.title}`}
@@ -274,7 +363,7 @@ export function AIChatComposer({
                     if (r.text === 'いい感じ、下書きして' && onGenerateDraft) {
                       onGenerateDraft();
                     } else {
-                      void handleSend(r.text);
+                      void handleSend({ text: r.text });
                     }
                   }}
                   disabled={isBlocked}
@@ -307,12 +396,9 @@ export function AIChatComposer({
           </div>
         )}
 
-        <div ref={endRef} />
-      </div>
-
-      {/* 2) 麹選択・例（会話開始前のみ表示） */}
-      {!hasStarted && (
-        <div className="space-y-4">
+        {/* 2) 麹選択・例（会話開始前のみ表示） */}
+        {!hasStarted && (
+          <div className="space-y-4 mt-4">
           {/* AIに聞いてみる（クイックプロンプト） */}
           <div className="space-y-2">
             <div className="text-xs text-muted-foreground flex items-center gap-1 justify-end">
@@ -389,50 +475,157 @@ export function AIChatComposer({
             </button>
           </div>
         </div>
-      )}
+        )}
 
-      <div className="pt-2">
-        <div className="flex items-center gap-3 rounded-full border border-border bg-background px-3 h-12">
-          <button
-            type="button"
-              disabled={isBlocked}
-            className="h-9 w-9 rounded-full border border-border bg-surface flex items-center justify-center hover:bg-muted transition-colors"
-            aria-label="メニュー"
-          >
-            <Plus className="h-5 w-5" />
-          </button>
-          <input
-            value={input}
-            onChange={(e) => onInputChange(e.target.value)}
-            placeholder="料理名やメモ（例：肉まん、生地は15分こねる）"
-            className="flex-1 bg-transparent outline-none text-sm"
-              disabled={isBlocked}
-            onKeyDown={(e) => {
-              // Enterで勝手に送信しない（IME確定/改行誤送信対策）
-              // 送信はボタン or Cmd/Ctrl+Enter のみ
-              if (e.key === 'Enter') {
-                if (e.metaKey || e.ctrlKey) {
-                  e.preventDefault();
-                  if (canSend) void handleSend();
-                } else {
-                  // IME確定などは通常動作（送信しない）
-                }
-              }
-            }}
-          />
-          <button
-            type="button"
-            onClick={() => {
-              void handleSend();
-            }}
-            disabled={!canSend}
-            className="h-10 w-10 rounded-full bg-foreground text-background flex items-center justify-center disabled:opacity-40"
-            aria-label="送信"
-          >
-            <ArrowUp className="h-5 w-5" />
-          </button>
+        <div ref={endRef} />
         </div>
       </div>
+
+      {/* 入力バー（画面下固定 - BottomNav 56px の上） */}
+      <div className="fixed left-1/2 -translate-x-1/2 w-full max-w-[375px] bottom-14 z-40">
+        <div className="px-3 py-2 bg-background/95 backdrop-blur border-t border-border">
+          {pendingAttachments.length > 0 && (
+            <div className="pb-2">
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <img
+                    src={pendingAttachments[0].dataUrl}
+                    alt="添付画像"
+                    className="h-12 w-12 rounded-lg object-cover border border-border"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setPendingAttachments([])}
+                    className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-foreground text-background text-xs flex items-center justify-center"
+                    aria-label="添付を削除"
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  画像を添付しました
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="flex items-end gap-2">
+            <button
+              type="button"
+              onClick={() => setIsAttachSheetOpen(true)}
+              disabled={isBlocked}
+              className="h-10 w-10 shrink-0 rounded-full border border-border bg-surface flex items-center justify-center hover:bg-muted transition-colors disabled:opacity-50"
+              aria-label="写真を追加"
+            >
+              <Plus className="h-5 w-5" />
+            </button>
+
+            <div className="flex-1 min-w-0 rounded-xl border border-border bg-surface px-3 py-2">
+              <textarea
+                ref={(el) => {
+                  textareaRef.current = el;
+                }}
+                value={input}
+                onChange={(e) => onInputChange(e.target.value)}
+                placeholder="料理名やメモ（例：肉まん）"
+                className="w-full resize-none bg-transparent outline-none text-sm leading-relaxed max-h-24"
+                rows={1}
+                disabled={isBlocked}
+                onKeyDown={(e) => {
+                  // Cmd/Ctrl+Enter で送信（改行は許可）
+                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                    e.preventDefault();
+                    void handleSubmit();
+                  }
+                }}
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={() => void handleSubmit()}
+              disabled={isBlocked || (input.trim().length === 0 && pendingAttachments.length === 0)}
+              className="h-10 w-10 shrink-0 rounded-full bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-40"
+              aria-label="送信"
+            >
+              <ArrowUp className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* 添付アクションシート */}
+      {isAttachSheetOpen && (
+        <div className="fixed inset-0 z-50">
+          <button
+            type="button"
+            className="absolute inset-0 bg-ink/40"
+            aria-label="閉じる"
+            onClick={() => setIsAttachSheetOpen(false)}
+          />
+          <div className="absolute left-1/2 -translate-x-1/2 bottom-14 w-full max-w-[375px] px-3 pb-3">
+            <div className="rounded-2xl border border-border bg-surface shadow-card overflow-hidden">
+              <button
+                type="button"
+                className="w-full px-4 py-4 text-left hover:bg-muted transition-colors"
+                onClick={() => {
+                  setIsAttachSheetOpen(false);
+                  cameraInputRef.current?.click();
+                }}
+              >
+                写真を撮影する
+              </button>
+              <div className="h-px bg-border" />
+              <button
+                type="button"
+                className="w-full px-4 py-4 text-left hover:bg-muted transition-colors"
+                onClick={() => {
+                  setIsAttachSheetOpen(false);
+                  fileInputRef.current?.click();
+                }}
+              >
+                写真を添付する
+              </button>
+              <div className="h-px bg-border" />
+              <button
+                type="button"
+                className="w-full px-4 py-4 text-left text-muted-foreground hover:bg-muted transition-colors"
+                onClick={() => setIsAttachSheetOpen(false)}
+              >
+                キャンセル
+              </button>
+            </div>
+          </div>
+
+          <input
+            ref={(el) => {
+              cameraInputRef.current = el;
+            }}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = '';
+              if (f) void addImageFile(f);
+            }}
+          />
+          <input
+            ref={(el) => {
+              fileInputRef.current = el;
+            }}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = '';
+              if (f) void addImageFile(f);
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }

@@ -8,7 +8,11 @@ export const runtime = 'nodejs';
 
 type RequestBody = {
   kojiType?: string; // オプショナル（未選択でも会話可能）
-  messages: Array<{ role: 'user' | 'ai'; text: string }>;
+  messages: Array<{
+    role: 'user' | 'ai';
+    text: string;
+    attachments?: Array<{ kind: 'image'; mimeType: string; dataBase64: string }>;
+  }>;
   firstTurn?: boolean; // 新規チャット開始後の最初の送信で true（現在は会話モードのみ使用）
   isQuickRecipeMode?: boolean; // クイックプロンプト経由でメニュー案が送信された場合true
 };
@@ -95,10 +99,21 @@ export async function POST(request: NextRequest) {
     }
 
     // フロントエンドの'ai'を'model'に変換（Gemini API形式）
-    const geminiMessages: ChatMessage[] = body.messages.map(msg => ({
-      role: msg.role === 'ai' ? 'model' : 'user',
-      text: msg.text,
-    }));
+    // 画像がある場合は parts に inlineData を含める
+    const geminiMessages: ChatMessage[] = body.messages.map((msg) => {
+      const role = msg.role === 'ai' ? 'model' : 'user';
+      const parts: Array<any> = [];
+      const text = String(msg.text ?? '');
+      if (text) parts.push({ text });
+      const images = Array.isArray(msg.attachments)
+        ? msg.attachments.filter((a) => a?.kind === 'image' && a?.mimeType && a?.dataBase64).slice(0, 1)
+        : [];
+      for (const img of images) {
+        parts.push({ inlineData: { mimeType: img.mimeType, data: img.dataBase64 } });
+      }
+      if (parts.length === 0) parts.push({ text: '' });
+      return { role, text, parts };
+    });
 
     // ユーザーのメッセージ数をカウント（会話の進行度を把握）
     const userMessageCount = body.messages.filter(m => m.role === 'user').length;

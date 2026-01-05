@@ -10,7 +10,7 @@ import { createPostStrict, updatePostStrict } from '@/lib/api/posts';
 import { createClient } from '@/lib/supabase/client';
 import type { GeneratedRecipe } from '@/lib/gemini/prompts';
 import type { Post } from '@/lib/types/database';
-import { AIChatComposer, type ChatMessage } from '@/components/AIChatComposer';
+import { AIChatComposer, type ChatAttachment, type ChatMessage } from '@/components/AIChatComposer';
 import { generateSeasonalGreeting, getSeasonalExampleText, pickSeasonalIngredientsForNow } from '@/lib/utils/seasonal';
 import { toKojiDisplayName } from '@/lib/utils/koji';
 import { AuthRequiredModal } from '@/components/AuthRequiredModal';
@@ -397,7 +397,7 @@ function ComposePageContent() {
     initialPromptSentRef.current = true;
     // 少し遅延させて自然な流れにする
     const timer = setTimeout(() => {
-      void handleChatSend(initialPrompt);
+      void handleChatSend({ text: initialPrompt });
     }, 500);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -632,16 +632,18 @@ function ComposePageContent() {
 
   // クイックプロンプト経由での送信（即レシピモード）
   const handleChatSendWithQuickRecipeMode = async (text: string) => {
-    return handleChatSendInternal(text, true);
+    return handleChatSendInternal(text, true, undefined);
   };
 
-  const handleChatSend = async (overrideText?: string) => {
-    const text = (overrideText ?? chatInput).trim();
-    if (!text) return;
-    return handleChatSendInternal(text, false);
+  const handleChatSend = async (payload?: { text?: string; attachments?: ChatAttachment[] }) => {
+    const rawText = payload?.text ?? chatInput;
+    const text = (rawText ?? '').trim();
+    const attachments = payload?.attachments;
+    if (!text && (!attachments || attachments.length === 0)) return;
+    return handleChatSendInternal(text, false, attachments);
   };
 
-  const handleChatSendInternal = async (text: string, isQuickRecipeMode: boolean) => {
+  const handleChatSendInternal = async (text: string, isQuickRecipeMode: boolean, attachments?: ChatAttachment[]) => {
     if (!text) return;
     if (isChatThinking) return;
 
@@ -671,6 +673,7 @@ function ComposePageContent() {
       id: `u-${Date.now()}`,
       role: 'user',
       text,
+      attachments: attachments && attachments.length > 0 ? attachments : undefined,
     };
     const pendingAiId = `a-${Date.now() + 1}`;
     const pendingAiMsg: ChatMessage = {
@@ -693,7 +696,18 @@ function ComposePageContent() {
       const isFirstTurn = chatMessages.filter((m) => m.role === 'user').length === 0;
       const payload = {
         kojiType: selectedKojiType,
-        messages: [...chatMessages, userMsg].map((m) => ({ role: m.role, text: m.text })),
+        messages: [...chatMessages, userMsg].map((m) => ({
+          role: m.role,
+          text: m.text,
+          // 画像は直近のユーザー発話のみ送る（payload肥大化を防ぐ）
+          attachments:
+            m.id === userMsg.id && m.role === 'user' && Array.isArray(m.attachments) && m.attachments.length > 0
+              ? m.attachments
+                  .filter((a) => a.kind === 'image')
+                  .slice(0, 1)
+                  .map((a) => ({ kind: a.kind, mimeType: a.mimeType, dataBase64: a.dataBase64 }))
+              : undefined,
+        })),
         firstTurn: isFirstTurn,
         isQuickRecipeMode, // クイックプロンプト経由なら即レシピモード
       };
@@ -945,7 +959,7 @@ function ComposePageContent() {
         />
 
         {/* メインコンテンツ */}
-        <main className="flex-1 overflow-y-auto pb-20">
+        <main className="flex-1 flex flex-col min-h-0">
           {mode === 'chat' && (
             <AIChatComposer
               messages={chatMessages}
@@ -977,7 +991,7 @@ function ComposePageContent() {
           )}
 
           {mode === 'select' && (
-            <div className="p-4 space-y-4">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-20">
               <div className="text-center space-y-2 py-8">
                 <h2 className="text-2xl font-bold">レシピ投稿方法を選択</h2>
                 <p className="text-muted-foreground">
@@ -1064,16 +1078,22 @@ function ComposePageContent() {
             </div>
           )}
 
-          {mode === 'ai' && <AIGenerateForm onRecipeGenerated={handleRecipeGenerated} />}
+          {mode === 'ai' && (
+            <div className="flex-1 overflow-y-auto pb-20">
+              <AIGenerateForm onRecipeGenerated={handleRecipeGenerated} />
+            </div>
+          )}
 
           {mode === 'manual' && (
-            <PostForm
-              onSubmit={handleSubmit}
-              onSaveDraft={handleSaveDraft}
-              isSubmitting={isSubmitting}
-              isSavingDraft={isSavingDraft}
-              initialData={initialData}
-            />
+            <div className="flex-1 overflow-y-auto pb-20">
+              <PostForm
+                onSubmit={handleSubmit}
+                onSaveDraft={handleSaveDraft}
+                isSubmitting={isSubmitting}
+                isSavingDraft={isSavingDraft}
+                initialData={initialData}
+              />
+            </div>
           )}
         </main>
       </div>

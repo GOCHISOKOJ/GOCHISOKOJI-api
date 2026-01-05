@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { AIAvatar } from '@/components/AIAvatar';
+import type { ChatAttachment } from '@/components/AIChatComposer';
 
 type ChatRole = 'ai' | 'user';
 
@@ -9,9 +10,10 @@ interface ChatMessageBubbleProps {
   role: ChatRole;
   text: string;
   aiAvatarSrc?: string | null;
+  attachments?: ChatAttachment[];
 }
 
-export function ChatMessageBubble({ role, text, aiAvatarSrc }: ChatMessageBubbleProps) {
+export function ChatMessageBubble({ role, text, aiAvatarSrc, attachments }: ChatMessageBubbleProps) {
   if (role === 'ai') {
     // #region agent log
     fetch('/api/debug-log', {
@@ -59,6 +61,7 @@ export function ChatMessageBubble({ role, text, aiAvatarSrc }: ChatMessageBubble
   }
 
   // ユーザーメッセージ
+  const image = (attachments || []).find((a) => a.kind === 'image');
   return (
     <div className="flex justify-end">
       <div className="relative max-w-[80%]">
@@ -75,6 +78,15 @@ export function ChatMessageBubble({ role, text, aiAvatarSrc }: ChatMessageBubble
         />
         {/* 吹き出し本体 */}
         <div className="rounded-2xl rounded-tr-md bg-primary shadow-sm px-4 py-3">
+          {image && (
+            <div className="pb-2">
+              <img
+                src={image.dataUrl}
+                alt="添付画像"
+                className="w-full max-h-64 object-cover rounded-xl border border-primary/30"
+              />
+            </div>
+          )}
           <p className="text-sm text-primary-foreground leading-relaxed whitespace-pre-wrap">{text}</p>
         </div>
       </div>

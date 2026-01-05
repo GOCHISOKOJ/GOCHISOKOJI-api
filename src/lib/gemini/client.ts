@@ -328,7 +328,8 @@ export async function generateJSON<T>(prompt: string): Promise<T> {
  */
 export type ChatMessage = {
   role: 'user' | 'model';
-  text: string;
+  text?: string;
+  parts?: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }>;
 };
 
 /**
@@ -347,9 +348,9 @@ export async function generateChatReply(
 
   // 会話履歴をGemini API形式に変換
   // システムインストラクションがある場合は最初のuserメッセージに含める（v1 API対応）
-  let contents = messages.map(msg => ({
+  let contents = messages.map((msg) => ({
     role: msg.role,
-    parts: [{ text: msg.text }]
+    parts: Array.isArray(msg.parts) && msg.parts.length > 0 ? msg.parts : [{ text: msg.text ?? '' }],
   }));
 
   // システムプロンプトを最初のuserメッセージの前に追加
@@ -357,10 +358,22 @@ export async function generateChatReply(
     // 最初のuserメッセージを見つけて、その前にシステムプロンプトを挿入
     const firstUserIndex = contents.findIndex(c => c.role === 'user');
     if (firstUserIndex >= 0) {
-      const originalText = contents[firstUserIndex].parts[0].text;
+      const existingParts = Array.isArray(contents[firstUserIndex].parts) ? contents[firstUserIndex].parts : [];
+      const firstTextIdx = existingParts.findIndex((p: any) => typeof p?.text === 'string');
+      const originalText =
+        firstTextIdx >= 0 && typeof (existingParts[firstTextIdx] as any).text === 'string'
+          ? String((existingParts[firstTextIdx] as any).text)
+          : '';
+      const injectedText = `【システム設定】\n${systemInstruction}\n\n【ユーザーのメッセージ】\n${originalText}`;
+      const nextParts = [...existingParts];
+      if (firstTextIdx >= 0) {
+        nextParts[firstTextIdx] = { ...(nextParts[firstTextIdx] as any), text: injectedText };
+      } else {
+        nextParts.unshift({ text: injectedText });
+      }
       contents[firstUserIndex] = {
         role: 'user',
-        parts: [{ text: `【システム設定】\n${systemInstruction}\n\n【ユーザーのメッセージ】\n${originalText}` }]
+        parts: nextParts,
       };
     }
   }
