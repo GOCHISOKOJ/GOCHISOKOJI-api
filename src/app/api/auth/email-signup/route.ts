@@ -47,6 +47,20 @@ export async function POST(request: NextRequest) {
       password,
     });
 
+    // #region debug log
+    console.log('[SIGNUP DEBUG]', {
+      email,
+      hasError: !!error,
+      errorMessage: error?.message,
+      hasUser: !!data.user,
+      userId: data.user?.id,
+      userEmail: data.user?.email,
+      emailConfirmedAt: data.user?.email_confirmed_at,
+      hasSession: !!data.session,
+      identities: data.user?.identities?.length,
+    });
+    // #endregion
+
     if (error) {
       let message = '新規登録に失敗しました。';
       if (error.message.includes('already registered')) {
@@ -55,7 +69,16 @@ export async function POST(request: NextRequest) {
         message = '有効なメールアドレスを入力してください。';
       }
       return NextResponse.json(
-        { success: false, error: message },
+        { success: false, error: message, debug: { errorMessage: error.message } },
+        { status: 400, headers: corsHeaders }
+      );
+    }
+
+    // Supabaseの仕様: 既存ユーザー（未確認）で再度signUpすると、エラーなしで空のidentitiesが返る
+    // これは「既に登録済み」を意味する
+    if (data.user && data.user.identities && data.user.identities.length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'このメールアドレスは既に登録されています。メールを確認するか、ログインしてください。' },
         { status: 400, headers: corsHeaders }
       );
     }

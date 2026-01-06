@@ -40,6 +40,17 @@ export async function POST(request: NextRequest) {
       password,
     });
 
+    // #region debug log
+    console.log('[LOGIN DEBUG]', {
+      email,
+      hasError: !!error,
+      errorMessage: error?.message,
+      errorStatus: error?.status,
+      hasUser: !!data.user,
+      hasSession: !!data.session,
+    });
+    // #endregion
+
     if (error) {
       let message = 'ログインに失敗しました。';
       if (error.message.includes('Invalid login credentials')) {
@@ -48,7 +59,7 @@ export async function POST(request: NextRequest) {
         message = 'メールアドレスの確認が完了していません。確認メールをご確認ください。';
       }
       return NextResponse.json(
-        { success: false, error: message },
+        { success: false, error: message, debug: { errorMessage: error.message } },
         { status: 401, headers: corsHeaders }
       );
     }
