@@ -221,8 +221,15 @@
 }
 
 @layer base {
-  * {
+  /* SVGとその子要素を除外してborderスタイルを適用 */
+  *:not(svg):not(svg *) {
     @apply border-border outline-ring/50;
+  }
+  
+  /* SVGアイコンのベーススタイル */
+  svg {
+    display: inline-block;
+    vertical-align: middle;
   }
 
   body {
