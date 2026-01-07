@@ -647,28 +647,6 @@ function ComposePageContent() {
     if (!text) return;
     if (isChatThinking) return;
 
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/35dd2980-78af-40fd-a649-80906759f95d', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sessionId: 'debug-session',
-        runId: 'chat-client',
-        hypothesisId: 'CHAT',
-        location: 'src/app/(app)/compose/page.tsx',
-        message: 'handleChatSend called',
-        data: {
-          source: isQuickRecipeMode ? 'quick-prompt' : 'input',
-          textLen: text.length,
-          selectedKojiType,
-          chatMessagesCount: chatMessages.length,
-          isQuickRecipeMode,
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
-
     const userMsg: ChatMessage = {
       id: `u-${Date.now()}`,
       role: 'user',
@@ -752,27 +730,6 @@ function ComposePageContent() {
           setSelectedKojiType(normalizedKoji);
         }
       }
-
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/35dd2980-78af-40fd-a649-80906759f95d', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId: 'debug-session',
-          runId: 'chat-client',
-          hypothesisId: 'CHAT',
-          location: 'src/app/(app)/compose/page.tsx',
-          message: 'chat api response',
-          data: {
-            ok: res.ok,
-            outLen: aiText?.length ?? null,
-            suggestionsCount: suggestions.length,
-            popularCount: popular.length,
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
 
       // 通常の会話
       setChatMessages((prev) =>

@@ -272,8 +272,6 @@ export async function POST(request: NextRequest) {
     chips = chips
       .map((c) => c.trim())
       .filter((c) => isConfirmationChip(c) || (c.length >= 2 && c.length <= 15))
-      // 確認用チップはreplyチェックをスキップ
-      .filter((c) => isConfirmationChip(c) || replyNormalized.includes(c.replace(/\s+/g, '')))
       // 「その他」系は常に除外
       .filter((c) => !/^(その他|そのほか|他)$/.test(c))
       // 曖昧表現（例: もっとあっさりに）は除外
