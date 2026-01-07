@@ -6,6 +6,18 @@ import { searchEvidence, type EvidenceItem } from '@/lib/rag';
 
 export const runtime = 'nodejs';
 
+// CORS headers
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+};
+
+// Handle OPTIONS request for CORS preflight
+export async function OPTIONS() {
+  return NextResponse.json({}, { headers: corsHeaders });
+}
+
 type RequestBody = {
   kojiType?: string; // オプショナル（未選択でも会話可能）
   messages: Array<{
@@ -193,7 +205,7 @@ export async function POST(request: NextRequest) {
         return chipsMatch[1]
           .split(',')
           .map(s => s.trim().replace(/"/g, '').replace(/'/g, ''))
-          .filter(s => s.length >= 2 && s.length <= 10);
+          .filter(s => s.length >= 2 && s.length <= 20); // 「いい感じ、下書きして」(11文字)を含むために20に拡大
       }
       return [];
     }
@@ -212,8 +224,14 @@ export async function POST(request: NextRequest) {
       }
       
       const parsed = JSON.parse(jsonStr);
+      // #region agent log
+      console.log('[DEBUG-SERVER-1] JSON parsed', { parsedKeys: Object.keys(parsed), hasChips: 'chips' in parsed, chipsType: typeof parsed.chips, chipsValue: parsed.chips, isChipsArray: Array.isArray(parsed.chips) });
+      // #endregion
       reply = typeof parsed.reply === 'string' ? parsed.reply : '';
       chips = Array.isArray(parsed.chips) ? parsed.chips.filter((c: any) => typeof c === 'string' && c.length >= 2 && c.length <= 15) : [];
+      // #region agent log
+      console.log('[DEBUG-SERVER-2] chips after initial filter', { chipsCount: chips.length, chips });
+      // #endregion
       // AIが判断した関連性の高い人気レシピのIDを取得
       recommendedIds = Array.isArray(parsed.recommended_ids) ? parsed.recommended_ids.filter((id: any) => typeof id === 'string') : [];
       // AIが提案した麹の種類（未選択時に使用）
@@ -269,6 +287,10 @@ export async function POST(request: NextRequest) {
     ];
     const isConfirmationChip = (c: string) => confirmationChips.includes(c);
     
+    // #region agent log
+    console.log('[DEBUG-SERVER-3] chips before server filter', { chipsCount: chips.length, chips });
+    // #endregion
+    
     chips = chips
       .map((c) => c.trim())
       .filter((c) => isConfirmationChip(c) || (c.length >= 2 && c.length <= 15))
@@ -281,6 +303,10 @@ export async function POST(request: NextRequest) {
       // 「時短」は調理条件を聞いているときだけ許可（味の好み/それ以外では除外）
       .filter((c) => (c === '時短' ? isConstraintTurn && !isTasteTurn : true));
 
+    // #region agent log
+    console.log('[DEBUG-SERVER-4] chips after server filter', { chipsCount: chips.length, chips });
+    // #endregion
+
     // チップをフロントエンド形式に変換（フェーズに応じて表示を制御）
     let suggestions: Array<{ label: string; text: string }> = [];
     // レシピ下書き生成を促すボタンを表示するか（ユーザーが3回以上メッセージを送った後）
@@ -289,12 +315,22 @@ export async function POST(request: NextRequest) {
     if (userMessageCount === 0) {
       // フェーズ1（初回挨拶）: チップなし
       suggestions = [];
+      // #region agent log
+      console.log('[DEBUG-SERVER-5] userMessageCount is 0, no suggestions');
+      // #endregion
     } else if (chips.length > 0) {
       // AIが生成したチップを表示
       suggestions = chips.slice(0, 5).map(chip => ({
         label: chip,
         text: chip
       }));
+      // #region agent log
+      console.log('[DEBUG-SERVER-5] suggestions set', { suggestionsCount: suggestions.length, suggestions });
+      // #endregion
+    } else {
+      // #region agent log
+      console.log('[DEBUG-SERVER-5] chips is empty, no suggestions', { userMessageCount });
+      // #endregion
     }
     const finalReply = reply || 'ごめんね、うまく返答できなかったよ。もう一度送ってみて！';
     
@@ -323,7 +359,7 @@ export async function POST(request: NextRequest) {
         kojiType: p.koji_type,
         viewCount: p.view_count,
       })),
-    });
+    }, { headers: corsHeaders });
   } catch (error: any) {
     // #region agent log
     fetch('http://127.0.0.1:7244/ingest/a2183a97-7691-4013-9b1b-c6f1b8ad2750',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'chat/route.ts',message:'CATCH_ERROR',data:{error:error?.message,stack:error?.stack?.substring(0,300)},timestamp:Date.now(),sessionId:'debug',runId:'chat-debug',hypothesisId:'E'})}).catch(()=>{});
@@ -334,7 +370,7 @@ export async function POST(request: NextRequest) {
         error: 'チャットの生成に失敗しました',
         details: error instanceof Error ? error.message : 'Unknown error',
       },
-      { status: 500 }
+      { status: 500, headers: corsHeaders }
     );
   }
 }

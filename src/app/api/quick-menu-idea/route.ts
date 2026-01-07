@@ -4,6 +4,18 @@ import { searchEvidence, type EvidenceItem } from '@/lib/rag';
 
 export const runtime = 'nodejs';
 
+// CORS headers
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+};
+
+// Handle OPTIONS request for CORS preflight
+export async function OPTIONS() {
+  return NextResponse.json({}, { headers: corsHeaders });
+}
+
 type RequestBody = {
   promptCategory?: string; // 単一カテゴリ
   allCategories?: boolean; // 全カテゴリ一括生成
@@ -768,13 +780,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: true,
         results,
-      });
+      }, { headers: corsHeaders });
     }
 
     // 単一カテゴリ生成
     const { promptCategory } = body;
     if (!promptCategory) {
-      return NextResponse.json({ error: 'promptCategory または allCategories が必要です' }, { status: 400 });
+      return NextResponse.json({ error: 'promptCategory または allCategories が必要です' }, { status: 400, headers: corsHeaders });
     }
 
     const { menuIdea, kojiType } = await generateMenuIdea(promptCategory);
@@ -783,7 +795,7 @@ export async function POST(request: NextRequest) {
       success: true,
       menuIdea,
       kojiType,
-    });
+    }, { headers: corsHeaders });
   } catch (error: any) {
     console.error('Error in /api/quick-menu-idea:', error);
     return NextResponse.json(
@@ -791,7 +803,7 @@ export async function POST(request: NextRequest) {
         error: 'メニュー案の生成に失敗しました',
         details: error instanceof Error ? error.message : 'Unknown error',
       },
-      { status: 500 }
+      { status: 500, headers: corsHeaders }
     );
   }
 }
