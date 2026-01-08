@@ -4,6 +4,18 @@ import { generateJSON } from '@/lib/gemini/client';
 
 export const runtime = 'nodejs';
 
+// CORSヘッダー
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+};
+
+// CORS プリフライト対応
+export async function OPTIONS() {
+  return new Response(null, { status: 204, headers: corsHeaders });
+}
+
 interface ExtractRecipeRequest {
   messages: Array<{
     role: 'user' | 'ai';
@@ -28,7 +40,7 @@ export async function POST(request: NextRequest) {
     if (!Array.isArray(body?.messages) || body.messages.length === 0) {
       return NextResponse.json(
         { error: '会話履歴が必要です' },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       );
     }
 
@@ -83,7 +95,7 @@ ${conversationText}
     return NextResponse.json({
       success: true,
       recipe,
-    });
+    }, { headers: corsHeaders });
 
   } catch (error: any) {
     console.error('Error in /api/extract-recipe:', error);
@@ -93,7 +105,7 @@ ${conversationText}
         error: 'レシピの抽出に失敗しました',
         details: error instanceof Error ? error.message : 'Unknown error',
       },
-      { status: 500 }
+      { status: 500, headers: corsHeaders }
     );
   }
 }

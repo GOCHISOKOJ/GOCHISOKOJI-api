@@ -585,7 +585,7 @@ ${soupKnowledge}
 【必須食材（絶対に変更不可）】
 ${category === '材料1つでできる' 
   ? `この食材だけを使うこと: ${randomVeggie}`
-  : `この食材の組み合わせを必ず使うこと: ${randomProtein}と${randomVeggie}`}
+  : `この食材を必ず使うこと: ${randomProtein ? `${randomProtein}と${randomVeggie}` : randomVeggie}`}
 
 【重要】上記の食材は変更禁止です。他の食材に置き換えないでください。
 
@@ -605,8 +605,11 @@ ${requiredHints.length > 0 ? requiredHints.map((s) => `- ${s}`).join('\n') : '- 
 ${category === '材料1つでできる'
   ? `- 必ず「${randomVeggie}」を料理名に含める
 - 例: 「${randomVeggie}の${kojiShort}和え」「${randomVeggie}の${kojiShort}ナムル」`
-  : `- 必ず「${randomProtein}」と「${randomVeggie}」を料理名に含める
-- 例: 「${randomProtein}と${randomVeggie}の${kojiShort}炒め」`}
+  : randomProtein 
+    ? `- 必ず「${randomProtein}」と「${randomVeggie}」を料理名に含める
+- 例: 「${randomProtein}と${randomVeggie}の${kojiShort}炒め」`
+    : `- 必ず「${randomVeggie}」を料理名に含める
+- 例: 「${randomVeggie}の${kojiShort}サラダ」「${randomVeggie}の${kojiShort}和え」`}
 
 【絶対禁止】指定食材以外の食材を料理名に使わないこと
 
