@@ -629,7 +629,7 @@ ${category === '材料1つでできる'
   let menuIdea = '';
   for (const a of attempts) {
     const raw = await generateText(`${promptBase}${a.extra}`, {
-      model: 'gemini-2.0-flash-exp',
+      model: 'gemini-1.5-flash',
       temperature: a.temperature,
       maxOutputTokens: 500,
     });

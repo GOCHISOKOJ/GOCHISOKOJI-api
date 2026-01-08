@@ -155,7 +155,7 @@ export async function POST(request: NextRequest) {
     const systemInstruction = evidenceBlock ? `${baseSystemInstruction}\n\n${evidenceBlock}` : baseSystemInstruction;
 
     // #region agent log
-    await log('2_before_gemini', {model:'gemini-2.0-flash-exp',userMessageCount,messagesCount:geminiMessages.length}, 'B');
+    await log('2_before_gemini', {model:'gemini-1.5-flash',userMessageCount,messagesCount:geminiMessages.length}, 'B');
     // #endregion
 
     // Gemini APIに会話履歴全てを送信（JSON形式で返答とチップを同時生成）
@@ -163,7 +163,7 @@ export async function POST(request: NextRequest) {
       geminiMessages,
       systemInstruction,
       {
-        model: 'gemini-2.0-flash-exp',
+        model: 'gemini-1.5-flash',
         temperature: 0.7,
         maxOutputTokens: 4000,
       }
