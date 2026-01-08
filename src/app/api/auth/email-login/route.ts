@@ -53,13 +53,15 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       let message = 'ログインに失敗しました。';
+      let needsEmailConfirmation = false;
       if (error.message.includes('Invalid login credentials')) {
-        message = 'メールアドレスまたはパスワードが正しくありません。';
+        message = 'メールアドレスまたはパスワードが正しくありません。新規登録済みの場合は、確認メールのリンクをクリックしてからログインしてください。';
       } else if (error.message.includes('Email not confirmed')) {
-        message = 'メールアドレスの確認が完了していません。確認メールをご確認ください。';
+        message = 'メールアドレスの確認が完了していません。登録時に届いた確認メールのリンクをクリックしてください。';
+        needsEmailConfirmation = true;
       }
       return NextResponse.json(
-        { success: false, error: message, debug: { errorMessage: error.message } },
+        { success: false, error: message, needsEmailConfirmation, debug: { errorMessage: error.message } },
         { status: 401, headers: corsHeaders }
       );
     }

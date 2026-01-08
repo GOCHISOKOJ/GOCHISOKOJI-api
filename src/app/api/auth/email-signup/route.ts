@@ -78,7 +78,11 @@ export async function POST(request: NextRequest) {
     // これは「既に登録済み」を意味する
     if (data.user && data.user.identities && data.user.identities.length === 0) {
       return NextResponse.json(
-        { success: false, error: 'このメールアドレスは既に登録されています。メールを確認するか、ログインしてください。' },
+        { 
+          success: false, 
+          error: 'このメールアドレスは既に登録されています。登録時に届いた確認メールのリンクをクリックしてからログインしてください。',
+          alreadyRegistered: true
+        },
         { status: 400, headers: corsHeaders }
       );
     }
