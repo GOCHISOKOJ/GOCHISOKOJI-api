@@ -51,7 +51,7 @@ function getModelName(options?: GenerateOptions): string {
     options?.model ||
     process.env.GEMINI_MODEL ||
     // デフォルトモデル
-    'gemini-1.5-flash'
+    'gemini-3-flash-preview'
   );
 }
 
