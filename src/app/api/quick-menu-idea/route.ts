@@ -401,14 +401,31 @@ function buildCategoryQuery(category: string): string {
   }
 }
 
-async function generateMenuIdea(category: string, exclusionHint?: string, assignedIngredients?: { protein: string; veggie: string }): Promise<{ menuIdea: string; kojiType: string }> {
+async function generateMenuIdea(
+  category: string, 
+  exclusionHint?: string, 
+  assignedIngredients?: { protein: string; veggie: string },
+  specifiedKojiType?: string // 麹タイプを指定（指定がなければ従来通りカテゴリに応じて決定）
+): Promise<{ menuIdea: string; kojiType: string }> {
   let categoryDesc = categoryPrompts[category] || '';
 
   // 汁物の場合、食材をセットで選ぶ（汁物の種類はAIが食材から判断）
   let kojiType: string;
   let soupIngredients: { protein: string; veggie: string } | undefined;
   
-  if (category === '汁物') {
+  if (specifiedKojiType) {
+    // 麹タイプが指定されている場合はそれを使用
+    kojiType = specifiedKojiType;
+    if (category === '汁物') {
+      // 汁物の場合、指定された麹に合う食材を選ぶ
+      const matchingSoups = SOUP_WITH_INGREDIENTS.filter(s => s.koji === specifiedKojiType);
+      const soupSet = matchingSoups.length > 0 
+        ? matchingSoups[Math.floor(Math.random() * matchingSoups.length)]
+        : SOUP_WITH_INGREDIENTS[Math.floor(Math.random() * SOUP_WITH_INGREDIENTS.length)];
+      soupIngredients = { protein: soupSet.protein, veggie: soupSet.veggie };
+      categoryDesc = `体が温まる汁物`;
+    }
+  } else if (category === '汁物') {
     // 汁物の食材をセットで選択（汁物の種類はAIが食材を見て判断）
     const soupSet = pickSoupWithIngredients();
     kojiType = soupSet.koji;
@@ -748,22 +765,40 @@ function assignUniqueIngredientsPerCategory(): Record<string, { protein: string;
 }
 
 // 5カテゴリを並列で生成（高速化）
-async function generateAllMenuIdeasParallel(): Promise<Record<string, { menuIdea: string; kojiType: string }>> {
+// 各カテゴリで3つの麹タイプ（旨塩/中華/コンソメ）それぞれのメニュー案を生成
+async function generateAllMenuIdeasParallel(): Promise<Record<string, { menuIdeas: Array<{ menuIdea: string; kojiType: string }> }>> {
   // 各カテゴリに異なる食材を事前割り当て
   const ingredientAssignments = assignUniqueIngredientsPerCategory();
   
-  // 5カテゴリを並列実行（最も遅い1つの時間で全完了）
-  const promises = CATEGORIES.map(async (category) => {
+  // 5カテゴリ × 3麹タイプ = 15の生成を並列実行
+  const promises: Array<Promise<{ category: string; menuIdea: string; kojiType: string }>> = [];
+  
+  for (const category of CATEGORIES) {
     const assigned = ingredientAssignments[category];
-    const result = await generateMenuIdea(category, undefined, assigned);
-    return { category, ...result };
-  });
+    
+    // 各カテゴリで3つの麹タイプそれぞれのメニュー案を生成
+    for (const kojiType of KOJI_TYPES) {
+      promises.push(
+        generateMenuIdea(category, undefined, assigned, kojiType)
+          .then(result => ({ category, ...result }))
+      );
+    }
+  }
 
   const allResults = await Promise.all(promises);
 
-  const results: Record<string, { menuIdea: string; kojiType: string }> = {};
-  for (const r of allResults) {
-    results[r.category] = { menuIdea: r.menuIdea, kojiType: r.kojiType };
+  // カテゴリごとにグループ化
+  const results: Record<string, { menuIdeas: Array<{ menuIdea: string; kojiType: string }> }> = {};
+  for (const category of CATEGORIES) {
+    const categoryResults = allResults.filter(r => r.category === category);
+    // 麹タイプの順序を固定（旨塩 → 中華 → コンソメ）
+    const orderedResults = KOJI_TYPES.map(kojiType => 
+      categoryResults.find(r => r.kojiType === kojiType)
+    ).filter((r): r is { category: string; menuIdea: string; kojiType: string } => r !== undefined);
+    
+    results[category] = {
+      menuIdeas: orderedResults.map(r => ({ menuIdea: r.menuIdea, kojiType: r.kojiType }))
+    };
   }
 
   return results;
