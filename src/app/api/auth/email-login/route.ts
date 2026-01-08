@@ -35,13 +35,28 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // まず、ユーザーが存在するか、メール確認が完了しているかを確認
+    const { data: { users }, error: listError } = await supabase.auth.admin.listUsers();
+    const existingUser = users?.find(u => u.email === email);
+    
+    // #region debug log
+    console.log('[LOGIN DEBUG-1] User lookup', {
+      email,
+      userExists: !!existingUser,
+      emailConfirmedAt: existingUser?.email_confirmed_at,
+      isConfirmed: !!existingUser?.email_confirmed_at,
+      userId: existingUser?.id,
+      createdAt: existingUser?.created_at,
+    });
+    // #endregion
+
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
     // #region debug log
-    console.log('[LOGIN DEBUG]', {
+    console.log('[LOGIN DEBUG-2] SignIn result', {
       email,
       hasError: !!error,
       errorMessage: error?.message,
