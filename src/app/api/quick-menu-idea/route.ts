@@ -582,12 +582,12 @@ ${exclusionBlock}
 【カテゴリ】${categoryDesc}
 【使用する調味料】${kojiType}
 ${soupKnowledge}
-【今回使う食材のヒント】
+【必須食材（絶対に変更不可）】
 ${category === '材料1つでできる' 
-  ? `- ${randomVeggie}（この1つの食材だけで作る）`
-  : randomProtein && randomVeggie 
-    ? `- ${randomProtein}と${randomVeggie}`
-    : `- ${randomVeggie || randomProtein}`}
+  ? `この食材だけを使うこと: ${randomVeggie}`
+  : `この食材の組み合わせを必ず使うこと: ${randomProtein}と${randomVeggie}`}
+
+【重要】上記の食材は変更禁止です。他の食材に置き換えないでください。
 
 ${evidenceBlock || ''}
 
@@ -599,12 +599,16 @@ ${requiredHints.length > 0 ? requiredHints.map((s) => `- ${s}`).join('\n') : '- 
 【出力形式】
 1行のみ。「料理名。説明文」の形式。
 
-【料理名のルール】
+【料理名のルール（厳守）】
 - 「${kojiShort}」を必ず含める
 - 何料理かわかる名前にする（〜炒め、〜スープ、〜サラダ等）
 ${category === '材料1つでできる'
-  ? `- 食材は1つだけ！例: 「${randomVeggie}の${kojiShort}和え」`
-  : `- 例: 「${randomProtein}と${randomVeggie}の${kojiShort}炒め」`}
+  ? `- 必ず「${randomVeggie}」を料理名に含める
+- 例: 「${randomVeggie}の${kojiShort}和え」「${randomVeggie}の${kojiShort}ナムル」`
+  : `- 必ず「${randomProtein}」と「${randomVeggie}」を料理名に含める
+- 例: 「${randomProtein}と${randomVeggie}の${kojiShort}炒め」`}
+
+【絶対禁止】指定食材以外の食材を料理名に使わないこと
 
 【説明文】50〜80文字。食感・香り・コクを伝える。最後は「！」
 出力:`;
