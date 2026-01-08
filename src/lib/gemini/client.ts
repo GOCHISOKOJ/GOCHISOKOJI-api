@@ -61,8 +61,8 @@ function joinTextFromResponse(json: GenerateContentResponse): string {
 }
 
 function getApiVersionForModel(_model: string): 'v1beta' | 'v1' {
-  // まず v1 を試し、モデル未対応なら v1beta にフォールバックする
-  return 'v1';
+  // gemini-1.5-* と gemini-2.0-* は v1beta が必要
+  return 'v1beta';
 }
 
 const LOG_URL = 'http://127.0.0.1:7244/ingest/a2183a97-7691-4013-9b1b-c6f1b8ad2750';
