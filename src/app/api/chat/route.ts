@@ -303,8 +303,16 @@ export async function POST(request: NextRequest) {
       // 「時短」は調理条件を聞いているときだけ許可（味の好み/それ以外では除外）
       .filter((c) => (c === '時短' ? isConstraintTurn && !isTasteTurn : true));
 
+    // レシピ応答を検出（材料、作り方/手順が含まれる場合）
+    const isRecipeResponse = reply.includes('材料') && (reply.includes('作り方') || reply.includes('手順'));
+
+    // レシピ応答の場合、「いい感じ、下書きして」チップを確実に追加
+    if (isRecipeResponse && !chips.some(c => c.includes('下書き'))) {
+      chips.push('いい感じ、下書きして');
+    }
+
     // #region agent log
-    console.log('[DEBUG-SERVER-4] chips after server filter', { chipsCount: chips.length, chips });
+    console.log('[DEBUG-SERVER-4] chips after server filter', { chipsCount: chips.length, chips, isRecipeResponse });
     // #endregion
 
     // チップをフロントエンド形式に変換（フェーズに応じて表示を制御）
