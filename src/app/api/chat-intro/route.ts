@@ -252,7 +252,7 @@ JSONのみ（コードフェンスや説明文なし）:
 }
 `.trim();
 
-    const raw = await generateText(prompt, { model: 'gemini-3.0-flash', temperature: 0.7, maxOutputTokens: 3000 });
+    const raw = await generateText(prompt, { model: 'gemini-2.0-flash-exp', temperature: 0.7, maxOutputTokens: 3000 });
     // #region agent log
     await logSync(
       'intro_raw',
