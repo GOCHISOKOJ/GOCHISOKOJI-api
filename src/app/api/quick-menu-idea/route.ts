@@ -121,6 +121,14 @@ const KOJI_TYPE_PATTERNS = [/旨塩風こうじ/, /中華風こうじ/, /コン�
 function validateMenuIdea(category: string, menuIdea: string, kojiType?: string): boolean {
   const trimmed = (menuIdea ?? '').trim();
   if (!trimmed) return false;
+  // 「チェック結果」「出力:」「引用符」「英語のメタ説明」などの混入を弾く
+  // NOTE: ここは“中途半端/毎回同じ/AIの思考が混ざる”問題の最重要防波堤
+  if (/^(出力|Output)\s*[:：]/i.test(trimmed)) return false;
+  if (/[\"'`]/.test(trimmed)) return false;
+  if (/(included\?|texture|aroma|richness|yes\s*\(|checklist|self[- ]?check)/i.test(trimmed)) return false;
+  if (/(思考|プロセス|チェーン|推論|internal)/i.test(trimmed)) return false;
+  if (/^[-*#]/.test(trimmed)) return false;
+  if (/\b(or|and)\b/i.test(trimmed)) return false;
   // 1行、料理名。説明文 の形式
   if (!trimmed.includes('。')) return false;
   // 最後は「！」推奨（最低限の勢い）
@@ -130,6 +138,12 @@ function validateMenuIdea(category: string, menuIdea: string, kojiType?: string)
 
   // タイトル（料理名）部分を抽出
   const title = trimmed.split('。')[0] || '';
+  const desc = trimmed.split('。').slice(1).join('。') || '';
+  if (title.trim().length < 6) return false;
+  // 「中途半端」対策: 説明文の最低文字数を担保（短すぎると「〜が！」のように途切れがち）
+  if (desc.trim().length < 24) return false;
+  // 余計な「。」が混ざっていない（normalizeOneLinerで潰れるが、念のため）
+  if ((trimmed.match(/。/g) ?? []).length !== 1) return false;
 
   // 「材料1つでできる」はタイトルに複数食材が混ざりやすいので、タイトルのみ厳格にチェックする
   // 以前の /と[^ろ]/ は本文の「とても」等にも誤爆するため廃止し、タイトル内の「と（とろ除外）」のみ禁止にする
@@ -167,6 +181,7 @@ function normalizeOneLiner(s: string): string {
 
   // 【クリーンアップ】AIが出力しがちな不要なプレフィックスを除去
   t = t
+    .replace(/^(出力|Output)[：:]\s*/i, '')
     .replace(/^料理名[の:]?\s*/i, '')
     .replace(/^(決定|タイトル|メニュー)[：:]\s*/i, '')
     .replace(/^\*+\s*/g, '')
@@ -619,6 +634,7 @@ ${requiredHints.length > 0 ? requiredHints.map((s) => `- ${s}`).join('\n') : '- 
 
 【出力形式】
 1行のみ。「料理名。説明文」の形式。
+余計な前置き（例: 「出力:」「チェック結果」「英語」「引用符」）は一切書かない。
 
 【料理名のルール（厳守）】
 - 「${kojiShort}」を必ず含める
