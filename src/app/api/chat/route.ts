@@ -139,13 +139,58 @@ export async function POST(request: NextRequest) {
     const baseSystemInstruction = createKojiChatSystemInstruction(kojiType, userMessageCount, popularListStr, isQuickRecipeMode);
 
     // RAG: 直近のユーザー発話をクエリにして、コーパス+投稿の抜粋を追加
+    // isQuickRecipeModeの場合は、メニュー名・食材・麹タイプを抽出してより精度の高い検索を行う
     let evidenceBlock = '';
     try {
       const lastUserText = [...body.messages].reverse().find((m) => m.role === 'user')?.text?.trim() || '';
       if (lastUserText) {
-        const queryStr = kojiType ? `${kojiType} ${lastUserText}` : lastUserText;
-        const evidence = await searchEvidence({ query: queryStr, topK: 6, sourceTypes: ['corpus', 'post'] });
-        evidenceBlock = formatEvidenceForPrompt(evidence);
+        let queryStr = kojiType ? `${kojiType} ${lastUserText}` : lastUserText;
+        
+        // isQuickRecipeModeの場合、メニュー名と食材を抽出してRAGクエリを強化
+        if (isQuickRecipeMode) {
+          // 「〇〇を作りたい」からメニュー名を抽出
+          const menuMatch = lastUserText.match(/「([^」]+)」/);
+          const menuName = menuMatch ? menuMatch[1] : '';
+          
+          // 「材料は〇〇です」から食材を抽出
+          const ingredientMatch = lastUserText.match(/材料は\s*([^。]+)/);
+          const ingredients = ingredientMatch ? ingredientMatch[1].replace(/です$/, '').trim() : '';
+          
+          // 麹タイプを抽出（「旨塩風こうじ」「中華風こうじ」「コンソメ風こうじ」）
+          const kojiMatch = lastUserText.match(/(旨塩風こうじ|中華風こうじ|コンソメ風こうじ)[調味料]*/);
+          const extractedKoji = kojiMatch ? kojiMatch[1] : '';
+          
+          // より具体的なクエリを構築
+          const queryParts = [
+            extractedKoji || kojiType,
+            menuName,
+            ingredients,
+            '作り方 レシピ 材料'
+          ].filter(Boolean);
+          queryStr = queryParts.join(' ');
+          
+          await log('rag_quick_recipe_query', { menuName, ingredients, extractedKoji, queryStr }, 'RAG_QUICK');
+        }
+        
+        // RAGで検索（isQuickRecipeModeの場合はより多くの結果を取得）
+        const topK = isQuickRecipeMode ? 10 : 6;
+        const evidence = await searchEvidence({ query: queryStr, topK, sourceTypes: ['corpus', 'post'] });
+        
+        // isQuickRecipeModeの場合、RAGの結果を強調
+        if (isQuickRecipeMode && evidence.length > 0) {
+          const lines = evidence.map((e) => {
+            const head = `[${e.sourceType}:${e.sourceId}#${e.chunkIndex}${e.title ? ` ${e.title}` : ''}]`;
+            return `- ${head} ${e.content}`;
+          });
+          evidenceBlock = [
+            '【重要：麹レシピデータベースからの参考情報】',
+            '以下は実際の麹レシピの抜粋です。これらを参考にして、正確で美味しいレシピを提案してください。',
+            '分量や調理時間は参考レシピに近づけ、麹の使い方は必ず守ってください。',
+            ...lines,
+          ].join('\n');
+        } else {
+          evidenceBlock = formatEvidenceForPrompt(evidence);
+        }
       }
     } catch (e) {
       await log('rag_chat_failed', { message: e instanceof Error ? e.message : String(e) }, 'RAG2');

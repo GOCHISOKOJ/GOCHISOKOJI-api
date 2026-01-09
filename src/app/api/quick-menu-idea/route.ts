@@ -26,6 +26,31 @@ type KojiType = (typeof KOJI_TYPES)[number];
 const CATEGORIES = ['5分で簡単レシピ', '材料1つでできる', '主菜（メイン）', '副菜（サブ）', '汁物'];
 type Category = (typeof CATEGORIES)[number];
 
+// 麹タイプごとの調理法（3案の調理法が被らないようにする）
+const DISH_TYPE_BY_KOJI: Record<KojiType, string> = {
+  '旨塩風こうじ調味料': '和え',      // あっさり系: 和え物、ナムル、マリネ
+  '中華風こうじ調味料': '炒め',      // 濃厚系: 炒め物、あんかけ
+  'コンソメ風こうじ調味料': 'スープ', // 洋風系: スープ、煮込み
+};
+
+// カテゴリ×麹タイプで調理法を決定（汁物は全てスープ系にする）
+function getDishTypeForKoji(category: Category, kojiType: KojiType): string {
+  if (category === '汁物') {
+    // 汁物カテゴリは麹タイプに関係なくスープ系
+    if (kojiType === '旨塩風こうじ調味料') return 'みそ汁';
+    if (kojiType === '中華風こうじ調味料') return '鍋';
+    return 'スープ';
+  }
+  if (category === '副菜（サブ）') {
+    // 副菜は軽めの調理法
+    if (kojiType === '旨塩風こうじ調味料') return '和え';
+    if (kojiType === '中華風こうじ調味料') return 'ナムル';
+    return 'サラダ';
+  }
+  // その他は基本マッピングを使用
+  return DISH_TYPE_BY_KOJI[kojiType];
+}
+
 // カテゴリに応じた説明
 const categoryPrompts: Record<string, string> = {
   '5分で簡単レシピ': '5分以内で作れる超時短',
@@ -995,12 +1020,19 @@ function buildFallbackIdeaJson(category: Category, kojiType: KojiType, assigned:
   const kojiShort = String(kojiType).replace('こうじ調味料', '');
   const p = (assigned.protein ?? '').trim();
   const v = (assigned.veggie ?? '').trim();
+  
+  // 麹タイプごとの調理法を取得（3案が被らない）
+  const dishType = getDishTypeForKoji(category, kojiType);
 
   if (category === '材料1つでできる') {
     const veg = v || 'もやし';
+    // 材料1つでも麹タイプで調理法を変える
+    const dishForSingle = kojiType === '旨塩風こうじ調味料' ? '和え' 
+      : kojiType === '中華風こうじ調味料' ? 'ナムル' 
+      : 'マリネ';
     return {
       kojiType,
-      title: `${veg}の${kojiShort}和え`,
+      title: `${veg}の${kojiShort}${dishForSingle}`,
       summary: `材料は${veg}だけ。${kojiShort}のうま味で味が決まり、あと一品でも満足感が出ます。\n食感を残すのがコツで、忙しい日にも作りやすいです。`,
       keyIngredients: [veg, kojiShort],
       steps: [
@@ -1014,22 +1046,68 @@ function buildFallbackIdeaJson(category: Category, kojiType: KojiType, assigned:
 
   const ing1 = p ? `${p}と${v}` : v;
   const timeMinutes = category === '5分で簡単レシピ' ? 5 : category === '汁物' ? 15 : 12;
-  const titleSuffix =
-    category === '汁物' ? 'スープ' :
-    category === '副菜（サブ）' ? 'サラダ' :
-    category === '主菜（メイン）' ? '炒め' :
-    '炒め';
-
-  return {
-    kojiType,
-    title: `${ing1}の${kojiShort}${titleSuffix}`,
-    summary: `${kojiShort}のコクで、素材の甘みとうま味が引き立つ一皿です。\n火入れは手早く、食感を残すと飽きずに食べられます。`,
-    keyIngredients: [p, v, kojiShort].filter(Boolean),
-    steps: [
+  
+  // 調理法に応じたsummaryとstepsを生成
+  const summaryByDish: Record<string, string> = {
+    '和え': `${kojiShort}のやさしい味わいで、素材の甘みが引き立ちます。\nさっと和えるだけで、あっさり美味しい一品に。`,
+    'ナムル': `${kojiShort}のコクでごま油香る本格派。\nシャキシャキ食感を残すのがポイントです。`,
+    'サラダ': `${kojiShort}がドレッシング代わりに。\n野菜の甘みを引き出す、さっぱりヘルシーな一皿。`,
+    'マリネ': `${kojiShort}の酸味と旨味でさっぱり仕上げ。\n作り置きにもぴったりです。`,
+    '炒め': `${kojiShort}のコクで、素材の甘みとうま味が引き立つ一皿。\n火入れは手早く、食感を残すと飽きずに食べられます。`,
+    'スープ': `${kojiShort}で出汁いらず、素材の旨味がじんわり溶け出す。\nほっと温まる優しい味わいです。`,
+    'みそ汁': `${kojiShort}を加えることで、いつものみそ汁がワンランクアップ。\n旨味が増して、ほっとする味に。`,
+    '鍋': `${kojiShort}がベースの旨味たっぷり鍋。\n野菜もお肉もたっぷり食べられます。`,
+  };
+  
+  const stepsByDish: Record<string, string[]> = {
+    '和え': [
+      `${p ? `${p}と` : ''}${v}は食べやすく切る`,
+      `さっと茹でるか電子レンジで加熱`,
+      `${kojiShort}を絡めて和える`,
+    ],
+    'ナムル': [
+      `${v}はさっと茹でて水気を切る`,
+      `${kojiShort}とごま油を混ぜる`,
+      `野菜と調味料を和えて完成`,
+    ],
+    'サラダ': [
+      `${p ? `${p}と` : ''}${v}を食べやすく切る`,
+      `${kojiShort}とオリーブオイルでドレッシングを作る`,
+      `野菜に回しかけて完成`,
+    ],
+    'マリネ': [
+      `${p ? `${p}と` : ''}${v}を薄切りにする`,
+      `${kojiShort}と酢を混ぜてマリネ液を作る`,
+      `30分ほど漬け込んで完成`,
+    ],
+    '炒め': [
       `${p ? `${p}と` : ''}${v}は食べやすく切る`,
       `フライパンで手早く火を通す`,
       `${kojiShort}で味をまとめて仕上げる`,
     ],
+    'スープ': [
+      `${p ? `${p}と` : ''}${v}を食べやすく切る`,
+      `鍋に水と材料を入れて煮る`,
+      `${kojiShort}で味を調えて完成`,
+    ],
+    'みそ汁': [
+      `${v}を食べやすく切る`,
+      `だし汁で具材を煮る`,
+      `味噌と${kojiShort}を溶き入れて完成`,
+    ],
+    '鍋': [
+      `${p ? `${p}と` : ''}${v}を食べやすく切る`,
+      `鍋に水と${kojiShort}を入れてスープを作る`,
+      `具材を入れて煮込む`,
+    ],
+  };
+
+  return {
+    kojiType,
+    title: `${ing1}の${kojiShort}${dishType}`,
+    summary: summaryByDish[dishType] || summaryByDish['炒め'],
+    keyIngredients: [p, v, kojiShort].filter(Boolean),
+    steps: stepsByDish[dishType] || stepsByDish['炒め'],
     timeMinutes,
   };
 }
@@ -1079,16 +1157,22 @@ GOCHISOKOJIのこうじ調味料を使って、ユーザーが作りたくなる
 【カテゴリ】${category}（${categoryDesc}）
 ${evidenceBlock ? `\n${evidenceBlock}\n` : ''}
 
-【3件の指定】（それぞれ必須食材は変更不可）
+【重要：3案の調理法は必ず分ける】
+- 旨塩風こうじ → 和え物・ナムル・マリネ（あっさり系）
+- 中華風こうじ → 炒め物・あんかけ（濃厚系）
+- コンソメ風こうじ → スープ・煮込み・サラダ（洋風系）
+
+【3件の指定】（それぞれ必須食材・調理法は変更不可）
 ${items
   .map((x, idx) => {
     const p = x.assigned.protein;
     const v = x.assigned.veggie;
+    const dishType = getDishTypeForKoji(category as Category, x.kojiType);
     const must =
       category === '材料1つでできる'
         ? `必須食材: ${v}（これだけ。料理名に必ず含め、タイトルで「と」で繋がない）`
         : `必須食材: ${p ? `${p} と ${v}` : v}（料理名に必ず含める）`;
-    return `${idx + 1}) kojiType: ${x.kojiType}\n- ${must}\n- 料理名は「旨塩風こうじ/中華風こうじ/コンソメ風こうじ」の短縮名を必ず含める\n- summaryは2〜3文で自然に（最後を無理に「！」にしない）\n- stepsは3〜5個で簡潔に`;
+    return `${idx + 1}) kojiType: ${x.kojiType}\n- ${must}\n- 【調理法】必ず「${dishType}」にする（例: 〇〇の旨塩風こうじ${dishType}）\n- 料理名は「旨塩風こうじ/中華風こうじ/コンソメ風こうじ」の短縮名を必ず含める\n- summaryは2〜3文で自然に（最後を無理に「！」にしない）\n- stepsは3〜5個で簡潔に`;
   })
   .join('\n\n')}
 
