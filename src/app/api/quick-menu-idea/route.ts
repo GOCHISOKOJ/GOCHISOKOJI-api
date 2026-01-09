@@ -24,6 +24,7 @@ type RequestBody = {
 const KOJI_TYPES = ['旨塩風こうじ調味料', '中華風こうじ調味料', 'コンソメ風こうじ調味料'] as const;
 type KojiType = (typeof KOJI_TYPES)[number];
 const CATEGORIES = ['5分で簡単レシピ', '材料1つでできる', '主菜（メイン）', '副菜（サブ）', '汁物'];
+type Category = (typeof CATEGORIES)[number];
 
 // カテゴリに応じた説明
 const categoryPrompts: Record<string, string> = {
@@ -67,6 +68,15 @@ type CategoryRule = {
   mustNotInclude?: RegExp[];
   // タイトル（料理名）に必須の調理法/料理タイプ
   titleMustIncludeAny?: RegExp[];
+};
+
+type MenuIdeaJson = {
+  kojiType: KojiType;
+  title: string;
+  summary: string; // 2〜3文
+  keyIngredients: string[]; // 2〜5個（材料1つは1個）
+  steps: string[]; // 3〜5個
+  timeMinutes?: number; // 任意
 };
 
 // カテゴリごとに「タイトルに必ず含めるべき調理法/料理タイプ」
@@ -173,6 +183,95 @@ function validateMenuIdea(category: string, menuIdea: string, kojiType?: string)
     if (rule.mustNotInclude.some((r) => r.test(trimmed))) return false;
   }
   return true;
+}
+
+function normalizeMultilineText(s: string): string {
+  return String(s ?? '')
+    .replace(/\r/g, '')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function extractJsonArray(text: string): string | null {
+  const t = String(text ?? '').trim();
+  const start = t.indexOf('[');
+  const end = t.lastIndexOf(']');
+  if (start < 0 || end < 0 || end <= start) return null;
+  return t.slice(start, end + 1);
+}
+
+function isNonEmptyString(x: unknown): x is string {
+  return typeof x === 'string' && x.trim().length > 0;
+}
+
+function isKojiType(x: unknown): x is KojiType {
+  return typeof x === 'string' && (KOJI_TYPES as readonly string[]).includes(x);
+}
+
+function validateMenuIdeaJson(
+  category: Category,
+  idea: any,
+  required: { protein: string; veggie: string },
+  kojiType: KojiType
+): MenuIdeaJson | null {
+  if (!idea || typeof idea !== 'object') return null;
+  if (!isKojiType(idea.kojiType) || idea.kojiType !== kojiType) return null;
+
+  const title = String(idea.title ?? '').trim();
+  const summary = normalizeMultilineText(idea.summary ?? '');
+  const keyIngredientsRaw = Array.isArray(idea.keyIngredients) ? idea.keyIngredients : [];
+  const stepsRaw = Array.isArray(idea.steps) ? idea.steps : [];
+  const timeMinutes = idea.timeMinutes;
+
+  if (title.length < 6 || title.length > 40) return null;
+  if (summary.length < 40 || summary.length > 260) return null;
+
+  // 日本語前提。英語メタ文・出力:・引用符などは弾く（ユーザー表示に直結）
+  const allText = `${title}\n${summary}\n${stepsRaw.join('\n')}`;
+  if (/^(出力|Output)\s*[:：]/im.test(allText)) return null;
+  if (/(included\?|checklist|self[- ]?check|texture|aroma|richness)/i.test(allText)) return null;
+  if (/(思考|プロセス|チェーン|推論|internal)/i.test(allText)) return null;
+  if (/\b(or|and)\b/i.test(allText)) return null;
+
+  const keyIngredients = keyIngredientsRaw
+    .map((x: any) => String(x ?? '').trim())
+    .filter((s: string) => s.length > 0)
+    .slice(0, 6);
+  const steps = stepsRaw
+    .map((x: any) => String(x ?? '').trim())
+    .filter((s: string) => s.length > 0)
+    .slice(0, 6);
+
+  if (steps.length < 3) return null;
+  if (category === '材料1つでできる') {
+    if (required.veggie && !title.includes(required.veggie)) return null;
+    if (/と(?!ろ)/.test(title)) return null;
+    if (keyIngredients.length < 1) return null;
+  } else {
+    if (required.protein && !title.includes(required.protein)) return null;
+    if (required.veggie && !title.includes(required.veggie)) return null;
+    if (keyIngredients.length < 2) return null;
+  }
+
+  // 麹名（短縮）がタイトルに入ることを要求
+  const kojiShort = String(kojiType).replace('こうじ調味料', '');
+  if (!title.includes(kojiShort)) return null;
+
+  // timeMinutes は任意。あるなら妥当な範囲のみ許可。
+  let tm: number | undefined = undefined;
+  if (typeof timeMinutes === 'number' && Number.isFinite(timeMinutes)) {
+    if (timeMinutes >= 3 && timeMinutes <= 60) tm = Math.round(timeMinutes);
+  }
+
+  return {
+    kojiType,
+    title,
+    summary,
+    keyIngredients,
+    steps,
+    ...(tm !== undefined ? { timeMinutes: tm } : {}),
+  };
 }
 
 function normalizeOneLiner(s: string): string {
@@ -748,7 +847,7 @@ ${category === '材料1つでできる'
 
 // カテゴリ×麹ごとの食材プール（毎回ランダムに選ぶ。3案は必ず旨塩/中華/コンソメ）
 type MenuCombo = { protein: string; veggie: string };
-type Category = (typeof CATEGORIES)[number];
+// NOTE: Category はファイル先頭で定義済み（重複回避）
 
 const INGREDIENT_POOL: Record<Category, Record<KojiType, MenuCombo[]>> = {
   '5分で簡単レシピ': {
@@ -892,21 +991,164 @@ function pickUniqueCombosForCategory(category: Category): Record<KojiType, MenuC
   return out;
 }
 
-async function generateThreeMenuIdeasForCategory(category: Category): Promise<{ menuIdeas: Array<{ menuIdea: string; kojiType: string }> }> {
+function buildFallbackIdeaJson(category: Category, kojiType: KojiType, assigned: MenuCombo): MenuIdeaJson {
+  const kojiShort = String(kojiType).replace('こうじ調味料', '');
+  const p = (assigned.protein ?? '').trim();
+  const v = (assigned.veggie ?? '').trim();
+
+  if (category === '材料1つでできる') {
+    const veg = v || 'もやし';
+    return {
+      kojiType,
+      title: `${veg}の${kojiShort}和え`,
+      summary: `材料は${veg}だけ。${kojiShort}のうま味で味が決まり、あと一品でも満足感が出ます。\n食感を残すのがコツで、忙しい日にも作りやすいです。`,
+      keyIngredients: [veg, kojiShort],
+      steps: [
+        `${veg}はさっと下処理して水気を切る`,
+        `${kojiShort}を絡めて味をなじませる`,
+        `好みでごまやこしょうを足して完成`,
+      ],
+      timeMinutes: 7,
+    };
+  }
+
+  const ing1 = p ? `${p}と${v}` : v;
+  const timeMinutes = category === '5分で簡単レシピ' ? 5 : category === '汁物' ? 15 : 12;
+  const titleSuffix =
+    category === '汁物' ? 'スープ' :
+    category === '副菜（サブ）' ? 'サラダ' :
+    category === '主菜（メイン）' ? '炒め' :
+    '炒め';
+
+  return {
+    kojiType,
+    title: `${ing1}の${kojiShort}${titleSuffix}`,
+    summary: `${kojiShort}のコクで、素材の甘みとうま味が引き立つ一皿です。\n火入れは手早く、食感を残すと飽きずに食べられます。`,
+    keyIngredients: [p, v, kojiShort].filter(Boolean),
+    steps: [
+      `${p ? `${p}と` : ''}${v}は食べやすく切る`,
+      `フライパンで手早く火を通す`,
+      `${kojiShort}で味をまとめて仕上げる`,
+    ],
+    timeMinutes,
+  };
+}
+
+async function generateThreeMenuIdeasForCategory(
+  category: Category
+): Promise<{ menuIdeas: MenuIdeaJson[] }> {
   const selected = pickUniqueCombosForCategory(category);
-  const promises = KOJI_TYPES.map(async (kojiType) => {
-    const assigned = selected[kojiType];
-    const res = await generateMenuIdea(category, undefined, assigned, kojiType);
-    return { menuIdea: res.menuIdea, kojiType: res.kojiType };
-  });
-  const menuIdeas = await Promise.all(promises);
-  return { menuIdeas };
+
+  const categoryDesc = categoryPrompts[category] || '';
+  const items = KOJI_TYPES.map((kojiType) => ({
+    kojiType,
+    assigned: selected[kojiType],
+  }));
+
+  // RAGはカテゴリごとに1回だけ（遅延を抑える）
+  let evidenceBlock = '';
+  try {
+    const ingredientWords = items
+      .flatMap((x) => [x.assigned.protein, x.assigned.veggie])
+      .filter(Boolean)
+      .join(' ');
+    const query = `${category} ${categoryDesc} ${ingredientWords} こうじ調味料`;
+    const evidence = await searchEvidence({ query, topK: 6, sourceTypes: ['corpus', 'post'] });
+    evidenceBlock = formatEvidenceForPrompt(evidence);
+  } catch {
+    evidenceBlock = '';
+  }
+
+  const schemaHint = `[
+  {
+    "kojiType": "旨塩風こうじ調味料",
+    "title": "料理名（日本語）",
+    "summary": "要約（2〜3文、改行OK。自然な日本語）",
+    "keyIngredients": ["主要材料", "こうじ"],
+    "steps": ["手順1", "手順2", "手順3"],
+    "timeMinutes": 5
+  }
+]`;
+
+  const prompt = `あなたは日本の家庭料理に強いプロの料理家です。
+GOCHISOKOJIのこうじ調味料を使って、ユーザーが作りたくなるメニュー案を3件提案します。
+
+【重要】出力はJSON配列のみ。説明文・前置き・見出し・コードフェンスは禁止。
+英語は禁止（JSONのキー以外は日本語）。引用符はJSONのダブルクォート以外使わない。
+
+【カテゴリ】${category}（${categoryDesc}）
+${evidenceBlock ? `\n${evidenceBlock}\n` : ''}
+
+【3件の指定】（それぞれ必須食材は変更不可）
+${items
+  .map((x, idx) => {
+    const p = x.assigned.protein;
+    const v = x.assigned.veggie;
+    const must =
+      category === '材料1つでできる'
+        ? `必須食材: ${v}（これだけ。料理名に必ず含め、タイトルで「と」で繋がない）`
+        : `必須食材: ${p ? `${p} と ${v}` : v}（料理名に必ず含める）`;
+    return `${idx + 1}) kojiType: ${x.kojiType}\n- ${must}\n- 料理名は「旨塩風こうじ/中華風こうじ/コンソメ風こうじ」の短縮名を必ず含める\n- summaryは2〜3文で自然に（最後を無理に「！」にしない）\n- stepsは3〜5個で簡潔に`;
+  })
+  .join('\n\n')}
+
+【出力JSONの例（この形に厳密に合わせる）】
+${schemaHint}
+
+出力:`;
+
+  const attempts: Array<{ temperature: number; extra: string }> = [
+    { temperature: 0.6, extra: '' },
+    {
+      temperature: 0.35,
+      extra:
+        '\n【再確認】JSONのみ。3件すべてにkojiType/title/summary/keyIngredients/stepsを入れる。条件未達なら書き直してから出力する。',
+    },
+  ];
+
+  for (const a of attempts) {
+    const raw = await generateText(`${prompt}${a.extra}`, {
+      model: 'gemini-3-flash-preview',
+      temperature: a.temperature,
+      maxOutputTokens: 900,
+    });
+
+    const jsonText = extractJsonArray(raw);
+    if (!jsonText) continue;
+
+    let parsed: any;
+    try {
+      parsed = JSON.parse(jsonText);
+    } catch {
+      continue;
+    }
+
+    if (!Array.isArray(parsed)) continue;
+
+    const out: MenuIdeaJson[] = [];
+    for (const item of items) {
+      const found = parsed.find((x: any) => x?.kojiType === item.kojiType);
+      const validated = validateMenuIdeaJson(category, found, item.assigned, item.kojiType);
+      if (validated) out.push(validated);
+    }
+
+    if (out.length === 3) {
+      return { menuIdeas: out };
+    }
+  }
+
+  // 最後の砦：常に読めるJSONを返す（UX最優先）
+  return {
+    menuIdeas: KOJI_TYPES.map((kojiType) =>
+      buildFallbackIdeaJson(category, kojiType, selected[kojiType])
+    ),
+  };
 }
 
 // 5カテゴリを並列で生成（高速化）
 // 各カテゴリで3つの異なる「食材+最適な麹」の組み合わせでメニュー案を生成
-async function generateAllMenuIdeasParallel(): Promise<Record<string, { menuIdeas: Array<{ menuIdea: string; kojiType: string }> }>> {
-  const results: Record<string, { menuIdeas: Array<{ menuIdea: string; kojiType: string }> }> = {};
+async function generateAllMenuIdeasParallel(): Promise<Record<string, { menuIdeas: MenuIdeaJson[] }>> {
+  const results: Record<string, { menuIdeas: MenuIdeaJson[] }> = {};
   const tasks = CATEGORIES.map(async (category) => {
     const res = await generateThreeMenuIdeasForCategory(category as Category);
     results[category] = res;
