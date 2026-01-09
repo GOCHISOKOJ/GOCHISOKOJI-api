@@ -304,8 +304,16 @@ function fixTitleDishType(category: string, title: string, kojiType?: string): s
   return result;
 }
 
-function enforceCategoryConstraints(category: string, menuIdea: string, kojiShort: string, kojiType: string): string {
+function enforceCategoryConstraints(
+  category: string,
+  menuIdea: string,
+  kojiShort: string,
+  kojiType: string,
+  requiredIngredients?: { protein?: string; veggie?: string }
+): string {
   let t = normalizeOneLiner(menuIdea);
+  const requiredProtein = (requiredIngredients?.protein ?? '').trim();
+  const requiredVeggie = (requiredIngredients?.veggie ?? '').trim();
 
   // タイトル（料理名）部分を抽出して調理法と麹名を補完
   let parts = t.split('。');
@@ -317,7 +325,7 @@ function enforceCategoryConstraints(category: string, menuIdea: string, kojiShor
   t = normalizeOneLiner(`${title}。${desc}`);
 
   // 既にOKならそのまま
-  if (validateMenuIdea(category, t)) return t;
+  if (validateMenuIdea(category, t, kojiType)) return t;
 
   // 不足している必須語を、説明文側に自然に追記して満たす（最後の砦）
   const ensure = (re: RegExp, suffix: string) => {
@@ -344,13 +352,15 @@ function enforceCategoryConstraints(category: string, menuIdea: string, kojiShor
 
   // それでもNGなら、カテゴリに応じた安全な1行に差し替え
   const kojiName = getKojiShortName(kojiType);
-  if (!validateMenuIdea(category, t)) {
+  if (!validateMenuIdea(category, t, kojiType)) {
+    const mainProtein = requiredProtein || '豚バラ';
+    const mainVeggie = requiredVeggie || 'キャベツ';
     const safeByCategory: Record<string, string> = {
-      '5分で簡単レシピ': `5分で完成！キャベツの${kojiName}炒め。${kojiShort}のコクがじゅわっと絡み、サッと作れて満足感たっぷり！`,
-      '材料1つでできる': `もやしだけの${kojiName}和え。${kojiShort}で味が決まり、材料1つでも箸が止まらない！`,
-      '汁物': `わかめと豆腐の${kojiName}みそ汁。${kojiShort}で出汁いらず、毎日飲みたいやさしい味！`,
-      '副菜（サブ）': `ブロッコリーの${kojiName}サラダ。${kojiShort}のコクで野菜がぐっとおいしく、あと一品に！`,
-      '主菜（メイン）': `豚バラとキャベツの${kojiName}炒め。${kojiShort}の香りとうま味で、ご飯が進む！`,
+      '5分で簡単レシピ': `5分で完成！${mainProtein ? `${mainProtein}と${mainVeggie}` : mainVeggie}の${kojiName}炒め。${kojiShort}のコクがじゅわっと絡み、サッと作れて満足感たっぷり！`,
+      '材料1つでできる': `${requiredVeggie || 'もやし'}だけの${kojiName}和え。${kojiShort}で味が決まり、材料1つでも箸が止まらない！`,
+      '汁物': `${mainProtein ? `${mainProtein}と${mainVeggie}` : mainVeggie}の${kojiName}スープ。${kojiShort}で出汁いらず、ほっと温まる一杯！`,
+      '副菜（サブ）': `${mainProtein ? `${mainProtein}と${mainVeggie}` : mainVeggie}の${kojiName}サラダ。${kojiShort}のコクで野菜がぐっとおいしく、あと一品に！`,
+      '主菜（メイン）': `${mainProtein}と${mainVeggie}の${kojiName}炒め。${kojiShort}の香りとうま味で、ご飯が進む！`,
     };
     return normalizeOneLiner(safeByCategory[category] || t);
   }
@@ -628,7 +638,7 @@ ${category === '材料1つでできる'
 出力:`;
 
   // 要件: 必ずGemini（gemini-3-flash-preview）で考案させる。テンプレの手動フォールバックはしない。
-  // 形式/カテゴリ条件を満たさない場合は自動リトライし、最後まで満たせなければエラーにする。
+  // 形式/カテゴリ条件を満たさない場合は自動リトライし、最後まで満たせなければ（選定済み食材を使った）安全な1行へ補正する。
   const attempts: Array<{ temperature: number; extra: string }> = [
     { temperature: 0.85, extra: '' },
     {
@@ -656,6 +666,11 @@ ${category === '材料1つでできる'
       maxOutputTokens: 700,
     });
     menuIdea = normalizeOneLiner(raw.trim().replace(/\n/g, ' ').slice(0, 320));
+    // 出力を正規化/補正して、カテゴリ要件（タイトルの料理タイプ/麹名/材料1つ等）を満たすようにする
+    menuIdea = enforceCategoryConstraints(category, menuIdea, kojiShort, kojiType, {
+      protein: randomProtein,
+      veggie: randomVeggie,
+    });
     if (validateMenuIdea(category, menuIdea, kojiType)) {
       break;
     }
