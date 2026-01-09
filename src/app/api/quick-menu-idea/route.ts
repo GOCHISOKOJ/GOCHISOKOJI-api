@@ -89,8 +89,6 @@ function getCategoryRule(category: string): CategoryRule {
     case '材料1つでできる':
       return {
         mustIncludeAny: [/材料1つ/, /だけ/],
-        // 「と」で複数食材を繋いでいないかチェック（「とろ〜」は除外）
-        mustNotInclude: [/と[^ろ]/, /、.+、/, /と.+と/],
         titleMustIncludeAny: titlePatterns,
       };
     case '主菜（メイン）':
@@ -132,6 +130,13 @@ function validateMenuIdea(category: string, menuIdea: string, kojiType?: string)
 
   // タイトル（料理名）部分を抽出
   const title = trimmed.split('。')[0] || '';
+
+  // 「材料1つでできる」はタイトルに複数食材が混ざりやすいので、タイトルのみ厳格にチェックする
+  // 以前の /と[^ろ]/ は本文の「とても」等にも誤爆するため廃止し、タイトル内の「と（とろ除外）」のみ禁止にする
+  if (category === '材料1つでできる') {
+    if (/と(?!ろ)/.test(title)) return false;
+    if (/、.+、/.test(title)) return false; // カンマ列挙も禁止
+  }
 
   // タイトルに具体的な麹の種類が含まれているか検証（必須）
   const hasSpecificKoji = KOJI_TYPE_PATTERNS.some((r) => r.test(title));
