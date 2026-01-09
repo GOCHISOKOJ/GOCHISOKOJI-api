@@ -17,11 +17,12 @@ export async function OPTIONS() {
 }
 
 type RequestBody = {
-  promptCategory?: string; // 単一カテゴリ
+  promptCategory?: string; // 単一カテゴリ（3案生成）
   allCategories?: boolean; // 全カテゴリ一括生成
 };
 
-const KOJI_TYPES = ['旨塩風こうじ調味料', '中華風こうじ調味料', 'コンソメ風こうじ調味料'];
+const KOJI_TYPES = ['旨塩風こうじ調味料', '中華風こうじ調味料', 'コンソメ風こうじ調味料'] as const;
+type KojiType = (typeof KOJI_TYPES)[number];
 const CATEGORIES = ['5分で簡単レシピ', '材料1つでできる', '主菜（メイン）', '副菜（サブ）', '汁物'];
 
 // カテゴリに応じた説明
@@ -418,11 +419,16 @@ async function generateMenuIdea(
     kojiType = specifiedKojiType;
     if (category === '汁物') {
       // 汁物の場合、指定された麹に合う食材を選ぶ
-      const matchingSoups = SOUP_WITH_INGREDIENTS.filter(s => s.koji === specifiedKojiType);
-      const soupSet = matchingSoups.length > 0 
-        ? matchingSoups[Math.floor(Math.random() * matchingSoups.length)]
-        : SOUP_WITH_INGREDIENTS[Math.floor(Math.random() * SOUP_WITH_INGREDIENTS.length)];
-      soupIngredients = { protein: soupSet.protein, veggie: soupSet.veggie };
+      // 3案の「食材が被らない」要件のため、assignedIngredients があればそれを優先する
+      if (assignedIngredients?.protein && assignedIngredients?.veggie) {
+        soupIngredients = { protein: assignedIngredients.protein, veggie: assignedIngredients.veggie };
+      } else {
+        const matchingSoups = SOUP_WITH_INGREDIENTS.filter(s => s.koji === specifiedKojiType);
+        const soupSet = matchingSoups.length > 0 
+          ? matchingSoups[Math.floor(Math.random() * matchingSoups.length)]
+          : SOUP_WITH_INGREDIENTS[Math.floor(Math.random() * SOUP_WITH_INGREDIENTS.length)];
+        soupIngredients = { protein: soupSet.protein, veggie: soupSet.veggie };
+      }
       categoryDesc = `体が温まる汁物`;
     }
   } else if (category === '汁物') {
@@ -616,13 +622,24 @@ ${category === '材料1つでできる'
 【説明文】50〜80文字。食感・香り・コクを伝える。最後は「！」
 出力:`;
 
-  // カテゴリの指示に従わせるため、検証 → NGなら温度を下げてリトライ
+  // 要件: 必ずGemini（gemini-3-flash-preview）で考案させる。テンプレの手動フォールバックはしない。
+  // 形式/カテゴリ条件を満たさない場合は自動リトライし、最後まで満たせなければエラーにする。
   const attempts: Array<{ temperature: number; extra: string }> = [
-    { temperature: 0.75, extra: '' },
+    { temperature: 0.85, extra: '' },
+    {
+      temperature: 0.55,
+      extra:
+        '\n【追加の絶対条件】\n- 指定食材（必須食材）を料理名に必ず含める\n- 料理名は必ず完結させる（途中で終わらせない）\n- 出力は1行のみ\n',
+    },
     {
       temperature: 0.35,
       extra:
-        '\n【追加の絶対条件】\n- 上の「カテゴリの指示」を満たさない出力は不合格。必ず満たしてから出力する。\n- 出力は1回で決める（やり直しの前提で書かない）。\n',
+        '\n【不合格条件】\n- 「料理名。説明文」の形式でない\n- 末尾が「！」でない\n- カテゴリ条件（5分/材料1つ 等）を満たさない\n上記を1つでも満たさない場合は、修正してから出力する。\n',
+    },
+    {
+      temperature: 0.25,
+      extra:
+        '\n【最終確認】\n出力前に自分でチェックし、条件を満たすまで書き直す。\n',
     },
   ];
 
@@ -631,47 +648,17 @@ ${category === '材料1つでできる'
     const raw = await generateText(`${promptBase}${a.extra}`, {
       model: 'gemini-3-flash-preview',
       temperature: a.temperature,
-      maxOutputTokens: 500,
+      maxOutputTokens: 700,
     });
-    // タイトルが途中で切れないよう、上限を広げる（麹名+調理法で長くなるため）
-    menuIdea = normalizeOneLiner(raw.trim().replace(/\n/g, ' ').slice(0, 300));
-    if (validateMenuIdea(category, menuIdea, kojiType)) break;
-  }
-
-  // 形式の最低保証（タイトルだけ等の事故をここで潰す）
-  const hasSeparator = menuIdea.includes('。');
-  const tooShort = menuIdea.length < 40;
-  const kojiName = getKojiShortName(kojiType);
-  
-  if (!hasSeparator || tooShort) {
-    // 参考の先頭から"料理名っぽいもの"を拾えなければ、カテゴリに沿ったテンプレで補う
-    const fallbackTitleByCategory: Record<string, string> = {
-      '5分で簡単レシピ': `サッとキャベツの${kojiName}炒め`,
-      '材料1つでできる': `もやしの${kojiName}和え`,
-      '主菜（メイン）': `豚バラとキャベツの${kojiName}炒め`,
-      '副菜（サブ）': `ブロッコリーの${kojiName}サラダ`,
-      '汁物': `わかめと豆腐の${kojiName}みそ汁`,
-    };
-    const pickedTitle = candidateTitles[0] || '';
-    let title = (pickedTitle || menuIdea.split('。')[0] || '').slice(0, 30);
-    title = fixTitleDishType(category, title, kojiType);
-    if (!title || title.length < 3 || !KOJI_TYPE_PATTERNS.some((r) => r.test(title))) {
-      title = fallbackTitleByCategory[category] || `こうじの簡単おかず`;
+    menuIdea = normalizeOneLiner(raw.trim().replace(/\n/g, ' ').slice(0, 320));
+    if (validateMenuIdea(category, menuIdea, kojiType)) {
+      break;
     }
-    const baseDescByCategory: Record<string, string> = {
-      '5分で簡単レシピ': `${kojiShort}で味付け一発、5分でサッと仕上がって満足感たっぷり！`,
-      '材料1つでできる': `${kojiShort}のうま味で味が決まり、材料1つでも箸が止まらない！`,
-      '主菜（メイン）': `${kojiShort}のコクが効いて、ご飯が進むメインおかずに仕上がる！`,
-      '副菜（サブ）': `${kojiShort}で野菜がぐっとおいしく、あと一品にぴったり！`,
-      '汁物': `${kojiShort}のうま味が染みわたる、体が温まる一杯！`,
-    };
-    const desc = baseDescByCategory[category] || `${kojiShort}のコクが決め手で、今日すぐ作りたくなる味！`;
-    menuIdea = `${title}。${desc}`;
   }
 
-  // カテゴリ制約を最終的に満たすよう補正（チップ指示に必ず従う）
-  // 汁物の種類はAIが食材を見て判断するため、強制的な種類変更は行わない
-  menuIdea = enforceCategoryConstraints(category, menuIdea, kojiShort, kojiType);
+  if (!validateMenuIdea(category, menuIdea, kojiType)) {
+    throw new Error(`Menu idea validation failed for category="${category}" koji="${kojiType}"`);
+  }
 
   // 文字の重複・異常なパターンを修正
   menuIdea = menuIdea
@@ -723,94 +710,172 @@ ${category === '材料1つでできる'
   return { menuIdea, kojiType };
 }
 
-// カテゴリごとに3つの異なる「食材+最適な麹」の組み合わせを定義
-// 各料理に最適な麹タイプを事前にマッピング
-type MenuCombo = { protein: string; veggie: string; kojiType: string };
+// カテゴリ×麹ごとの食材プール（毎回ランダムに選ぶ。3案は必ず旨塩/中華/コンソメ）
+type MenuCombo = { protein: string; veggie: string };
+type Category = (typeof CATEGORIES)[number];
 
-const THREE_MENU_COMBOS_BY_CATEGORY: Record<string, MenuCombo[]> = {
-  '5分で簡単レシピ': [
-    { protein: '豚こま', veggie: 'キャベツ', kojiType: '中華風こうじ調味料' },      // 中華風炒めに最適
-    { protein: 'ベーコン', veggie: 'ほうれん草', kojiType: 'コンソメ風こうじ調味料' }, // 洋風ソテーに最適
-    { protein: '卵', veggie: 'もやし', kojiType: '旨塩風こうじ調味料' },            // シンプルな和風に最適
-  ],
-  '材料1つでできる': [
-    { protein: '', veggie: 'もやし', kojiType: '中華風こうじ調味料' },    // もやしは中華風が合う
-    { protein: '', veggie: 'ブロッコリー', kojiType: 'コンソメ風こうじ調味料' }, // ブロッコリーは洋風が合う
-    { protein: '', veggie: 'にんじん', kojiType: '旨塩風こうじ調味料' },  // にんじんは旨塩で甘み引き立つ
-  ],
-  '主菜（メイン）': [
-    { protein: '鶏もも肉', veggie: 'ピーマン', kojiType: '中華風こうじ調味料' },  // 青椒肉絲風
-    { protein: '鮭', veggie: 'きのこ', kojiType: 'コンソメ風こうじ調味料' },     // 洋風ムニエル
-    { protein: '豚バラ', veggie: '白菜', kojiType: '旨塩風こうじ調味料' },       // 和風の定番
-  ],
-  '副菜（サブ）': [
-    { protein: '', veggie: 'ブロッコリー', kojiType: 'コンソメ風こうじ調味料' },  // 洋風サラダ
-    { protein: 'ツナ', veggie: 'キャベツ', kojiType: '旨塩風こうじ調味料' },     // 和風サラダ
-    { protein: '', veggie: '小松菜', kojiType: '中華風こうじ調味料' },          // 中華風ナムル
-  ],
-  '汁物': [
-    { protein: 'ベーコン', veggie: 'キャベツ', kojiType: 'コンソメ風こうじ調味料' },  // ポトフ風
-    { protein: '豚バラ', veggie: '白菜', kojiType: '中華風こうじ調味料' },           // 中華風スープ
-    { protein: '豆腐', veggie: 'わかめ', kojiType: '旨塩風こうじ調味料' },           // 和風みそ汁
-  ],
+const INGREDIENT_POOL: Record<Category, Record<KojiType, MenuCombo[]>> = {
+  '5分で簡単レシピ': {
+    '旨塩風こうじ調味料': [
+      { protein: '卵', veggie: 'もやし' },
+      { protein: 'ツナ', veggie: 'きゅうり' },
+      { protein: '豆腐', veggie: 'ニラ' },
+      { protein: '鶏ささみ', veggie: 'レタス' },
+      { protein: 'しらす', veggie: '大葉' },
+    ],
+    '中華風こうじ調味料': [
+      { protein: '豚こま', veggie: 'キャベツ' },
+      { protein: 'ひき肉', veggie: 'ニラ' },
+      { protein: 'えび', veggie: 'もやし' },
+      { protein: '鶏もも肉', veggie: 'ピーマン' },
+      { protein: '豚バラ', veggie: '白菜' },
+    ],
+    'コンソメ風こうじ調味料': [
+      { protein: 'ベーコン', veggie: 'ほうれん草' },
+      { protein: 'ウインナー', veggie: 'キャベツ' },
+      { protein: '鶏もも肉', veggie: 'ブロッコリー' },
+      { protein: '鮭', veggie: 'きのこ' },
+      { protein: 'ベーコン', veggie: '玉ねぎ' },
+    ],
+  },
+  '材料1つでできる': {
+    // 材料1つカテゴリは「メイン材料1つ」だけ（調味料はOK）。proteinは空に統一。
+    '旨塩風こうじ調味料': [
+      { protein: '', veggie: 'にんじん' },
+      { protein: '', veggie: '大根' },
+      { protein: '', veggie: 'きゅうり' },
+      { protein: '', veggie: '小松菜' },
+      { protein: '', veggie: 'れんこん' },
+      { protein: '', veggie: 'トマト' },
+    ],
+    '中華風こうじ調味料': [
+      { protein: '', veggie: 'もやし' },
+      { protein: '', veggie: 'ニラ' },
+      { protein: '', veggie: 'きくらげ' },
+      { protein: '', veggie: 'なす' },
+      { protein: '', veggie: '白菜' },
+      { protein: '', veggie: 'チンゲン菜' },
+    ],
+    'コンソメ風こうじ調味料': [
+      { protein: '', veggie: 'ブロッコリー' },
+      { protein: '', veggie: 'じゃがいも' },
+      { protein: '', veggie: '玉ねぎ' },
+      { protein: '', veggie: 'かぼちゃ' },
+      { protein: '', veggie: 'アスパラ' },
+      { protein: '', veggie: 'きのこ' },
+    ],
+  },
+  '主菜（メイン）': {
+    '旨塩風こうじ調味料': [
+      { protein: '豚バラ', veggie: '白菜' },
+      { protein: '鶏もも肉', veggie: '長ねぎ' },
+      { protein: '鮭', veggie: 'キャベツ' },
+      { protein: 'ぶり', veggie: '大根' },
+      { protein: '豚こま', veggie: '玉ねぎ' },
+    ],
+    '中華風こうじ調味料': [
+      { protein: 'ひき肉', veggie: 'なす' },
+      { protein: '豚こま', veggie: 'ピーマン' },
+      { protein: 'えび', veggie: 'ブロッコリー' },
+      { protein: '鶏もも肉', veggie: 'チンゲン菜' },
+      { protein: '豚バラ', veggie: 'もやし' },
+    ],
+    'コンソメ風こうじ調味料': [
+      { protein: '鶏もも肉', veggie: 'じゃがいも' },
+      { protein: '鮭', veggie: 'きのこ' },
+      { protein: 'ベーコン', veggie: 'キャベツ' },
+      { protein: '豚ロース', veggie: '玉ねぎ' },
+      { protein: 'ウインナー', veggie: 'にんじん' },
+    ],
+  },
+  '副菜（サブ）': {
+    '旨塩風こうじ調味料': [
+      { protein: 'ツナ', veggie: 'キャベツ' },
+      { protein: '', veggie: 'きゅうり' },
+      { protein: '', veggie: 'ほうれん草' },
+      { protein: '', veggie: '小松菜' },
+      { protein: '', veggie: 'トマト' },
+    ],
+    '中華風こうじ調味料': [
+      { protein: '', veggie: 'もやし' },
+      { protein: '', veggie: 'きゅうり' },
+      { protein: '', veggie: 'ニラ' },
+      { protein: '', veggie: 'チンゲン菜' },
+      { protein: '', veggie: 'きくらげ' },
+    ],
+    'コンソメ風こうじ調味料': [
+      { protein: '', veggie: 'ブロッコリー' },
+      { protein: 'ベーコン', veggie: 'ほうれん草' },
+      { protein: '', veggie: 'じゃがいも' },
+      { protein: '', veggie: 'にんじん' },
+      { protein: '', veggie: 'アスパラ' },
+    ],
+  },
+  '汁物': {
+    '旨塩風こうじ調味料': SOUP_WITH_INGREDIENTS.filter((s) => s.koji === '旨塩風こうじ調味料').map((s) => ({ protein: s.protein, veggie: s.veggie })),
+    '中華風こうじ調味料': SOUP_WITH_INGREDIENTS.filter((s) => s.koji === '中華風こうじ調味料').map((s) => ({ protein: s.protein, veggie: s.veggie })),
+    'コンソメ風こうじ調味料': SOUP_WITH_INGREDIENTS.filter((s) => s.koji === 'コンソメ風こうじ調味料').map((s) => ({ protein: s.protein, veggie: s.veggie })),
+  },
 };
 
-// カテゴリごとに3つの異なる食材組み合わせを取得
-function getThreeMenuCombos(category: string): MenuCombo[] {
-  return THREE_MENU_COMBOS_BY_CATEGORY[category] || THREE_MENU_COMBOS_BY_CATEGORY['主菜（メイン）'];
+function comboKey(c: MenuCombo): string {
+  return `${c.protein || ''}|${c.veggie || ''}`.trim();
 }
 
-// 旧関数（後方互換性のために残す）
-function assignUniqueIngredientsPerCategory(): Record<string, { protein: string; veggie: string }> {
-  const assignments: Record<string, { protein: string; veggie: string }> = {};
-  CATEGORIES.forEach((cat) => {
-    const combos = THREE_MENU_COMBOS_BY_CATEGORY[cat];
-    if (combos && combos.length > 0) {
-      const selected = combos[Math.floor(Math.random() * combos.length)];
-      assignments[cat] = { protein: selected.protein, veggie: selected.veggie };
-    } else {
-      assignments[cat] = { protein: '', veggie: '' };
+function pickOne<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function pickUniqueCombosForCategory(category: Category): Record<KojiType, MenuCombo> {
+  const used = new Set<string>();
+  const out = {} as Record<KojiType, MenuCombo>;
+  for (const koji of KOJI_TYPES) {
+    const pool = INGREDIENT_POOL[category]?.[koji] ?? [];
+    if (!pool.length) {
+      throw new Error(`No ingredient pool for category="${category}" koji="${koji}"`);
     }
+    // 衝突を避けて最大10回リトライ
+    let picked: MenuCombo | null = null;
+    for (let i = 0; i < 10; i++) {
+      const cand = pickOne(pool);
+      const k = comboKey(cand);
+      if (!used.has(k)) {
+        picked = cand;
+        used.add(k);
+        break;
+      }
+    }
+    // それでもダメなら最初の未使用を探す
+    if (!picked) {
+      const fallback = pool.find((c) => !used.has(comboKey(c)));
+      picked = fallback ?? pickOne(pool);
+      used.add(comboKey(picked));
+    }
+    out[koji] = picked;
+  }
+  return out;
+}
+
+async function generateThreeMenuIdeasForCategory(category: Category): Promise<{ menuIdeas: Array<{ menuIdea: string; kojiType: string }> }> {
+  const selected = pickUniqueCombosForCategory(category);
+  const promises = KOJI_TYPES.map(async (kojiType) => {
+    const assigned = selected[kojiType];
+    const res = await generateMenuIdea(category, undefined, assigned, kojiType);
+    return { menuIdea: res.menuIdea, kojiType: res.kojiType };
   });
-  return assignments;
+  const menuIdeas = await Promise.all(promises);
+  return { menuIdeas };
 }
 
 // 5カテゴリを並列で生成（高速化）
 // 各カテゴリで3つの異なる「食材+最適な麹」の組み合わせでメニュー案を生成
 async function generateAllMenuIdeasParallel(): Promise<Record<string, { menuIdeas: Array<{ menuIdea: string; kojiType: string }> }>> {
-  // 5カテゴリ × 3つの異なる組み合わせ = 15の生成を並列実行
-  const promises: Array<Promise<{ category: string; menuIdea: string; kojiType: string; index: number }>> = [];
-  
-  for (const category of CATEGORIES) {
-    // 各カテゴリで3つの異なる「食材+最適な麹」の組み合わせを取得
-    const menuCombos = getThreeMenuCombos(category);
-    
-    // 各組み合わせでメニュー案を生成（異なる食材 & 最適な麹）
-    menuCombos.forEach((combo, index) => {
-      const assigned = { protein: combo.protein, veggie: combo.veggie };
-      promises.push(
-        generateMenuIdea(category, undefined, assigned, combo.kojiType)
-          .then(result => ({ category, index, ...result }))
-      );
-    });
-  }
-
-  const allResults = await Promise.all(promises);
-
-  // カテゴリごとにグループ化
   const results: Record<string, { menuIdeas: Array<{ menuIdea: string; kojiType: string }> }> = {};
-  for (const category of CATEGORIES) {
-    const categoryResults = allResults.filter(r => r.category === category);
-    // インデックス順で並べる（事前定義順）
-    const orderedResults = categoryResults
-      .sort((a, b) => a.index - b.index)
-      .map(r => ({ menuIdea: r.menuIdea, kojiType: r.kojiType }));
-    
-    results[category] = {
-      menuIdeas: orderedResults
-    };
-  }
-
+  const tasks = CATEGORIES.map(async (category) => {
+    const res = await generateThreeMenuIdeasForCategory(category as Category);
+    results[category] = res;
+  });
+  await Promise.all(tasks);
   return results;
 }
 
@@ -834,13 +899,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'promptCategory または allCategories が必要です' }, { status: 400, headers: corsHeaders });
     }
 
-    const { menuIdea, kojiType } = await generateMenuIdea(promptCategory);
-
-    return NextResponse.json({
-      success: true,
-      menuIdea,
-      kojiType,
-    }, { headers: corsHeaders });
+    // 単一カテゴリでも3案（旨塩/中華/コンソメ）を返す
+    const { menuIdeas } = await generateThreeMenuIdeasForCategory(promptCategory as Category);
+    return NextResponse.json({ success: true, menuIdeas }, { headers: corsHeaders });
   } catch (error: any) {
     console.error('Error in /api/quick-menu-idea:', error);
     return NextResponse.json(

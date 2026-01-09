@@ -47,12 +47,13 @@ if (!_API_KEY) {
 const API_KEY: string = _API_KEY;
 
 function getModelName(options?: GenerateOptions): string {
-  return (
+  const raw =
     options?.model ||
     process.env.GEMINI_MODEL ||
     // デフォルトモデル
-    'gemini-3-flash-preview'
-  );
+    'gemini-3-flash-preview';
+  // `models/gemini-3-flash-preview` のような表記にも対応
+  return String(raw).replace(/^models\//, '');
 }
 
 function joinTextFromResponse(json: GenerateContentResponse): string {
@@ -261,22 +262,8 @@ async function callGenerateContent(prompt: string, options?: GenerateOptions): P
     return text;
   }
 
-  // 2) モデル未対応なら ListModels → 実在モデルへフォールバック（v1→v1beta）
-  const versions: Array<'v1' | 'v1beta'> = [initialApiVersion, initialApiVersion === 'v1' ? 'v1beta' : 'v1'];
-  for (const v of versions) {
-    const candidates = await listModels(v);
-    const preferred = pickPreferredModel(candidates);
-    if (!preferred) continue;
-    const attempt = await tryGenerate(preferred, v);
-    if (attempt.ok) {
-      // #region agent log
-      fetch(LOG_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'client.ts',message:'TEXT_FALLBACK_SUCCESS',data:{fromModel:initialModel,toModel:preferred,apiVersion:v,textLength:attempt.text.length},timestamp:Date.now(),sessionId:'debug',runId:'text-debug',hypothesisId:'T3'})}).catch(()=>{});
-      // #endregion
-      return attempt.text;
-    }
-  }
-
-  throw new Error(first.errMsg || 'Gemini API request failed');
+  // 要件: 必ず指定モデル（gemini-3-flash-preview）で生成する。別モデルへのフォールバックはしない。
+  throw new Error(first.errMsg || `Gemini API request failed (model=${initialModel})`);
 }
 
 /**
@@ -464,26 +451,8 @@ export async function generateChatReply(
   const first = await tryGenerate(initialModel, initialApiVersion);
   if (first.ok) return first.text;
 
-  // 2) モデル未対応っぽい場合は ListModels して候補から選ぶ（v1→v1betaの順）
-  const versions: Array<'v1' | 'v1beta'> = [initialApiVersion, initialApiVersion === 'v1' ? 'v1beta' : 'v1'];
-  for (const v of versions) {
-    const listed = await listModels(v);
-    if (!listed.candidates.length) continue;
-
-    // Prefer: gemini-*flash*, then gemini-*pro*, then first
-    const preferred =
-      listed.candidates.find((n) => /gemini/i.test(n) && /flash/i.test(n)) ||
-      listed.candidates.find((n) => /gemini/i.test(n) && /pro/i.test(n)) ||
-      listed.candidates[0];
-
-    if (!preferred) continue;
-    const modelName = preferred.replace(/^models\//, '');
-    const attempt = await tryGenerate(modelName, v);
-    if (attempt.ok) return attempt.text;
-  }
-
   // 最後に最初のエラーを投げる
-  throw new Error(first.errMsg || 'Gemini API request failed');
+  throw new Error(first.errMsg || `Gemini API request failed (model=${initialModel})`);
 }
 
 
