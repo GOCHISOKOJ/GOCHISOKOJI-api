@@ -102,6 +102,8 @@ type MenuIdeaJson = {
   keyIngredients: string[]; // 2〜5個（材料1つは1個）
   steps: string[]; // 3〜5個
   timeMinutes?: number; // 任意
+  caloriesKcal?: number; // カロリー（kcal）
+  saltG?: number; // 塩分（g）
 };
 
 // カテゴリごとに「タイトルに必ず含めるべき調理法/料理タイプ」
@@ -289,6 +291,18 @@ function validateMenuIdeaJson(
     if (timeMinutes >= 3 && timeMinutes <= 60) tm = Math.round(timeMinutes);
   }
 
+  // caloriesKcal は任意。あるなら妥当な範囲のみ許可。
+  let cal: number | undefined = undefined;
+  if (typeof idea.caloriesKcal === 'number' && Number.isFinite(idea.caloriesKcal)) {
+    if (idea.caloriesKcal >= 50 && idea.caloriesKcal <= 1500) cal = Math.round(idea.caloriesKcal);
+  }
+
+  // saltG は任意。あるなら妥当な範囲のみ許可。
+  let salt: number | undefined = undefined;
+  if (typeof idea.saltG === 'number' && Number.isFinite(idea.saltG)) {
+    if (idea.saltG >= 0.1 && idea.saltG <= 10) salt = Math.round(idea.saltG * 10) / 10;
+  }
+
   return {
     kojiType,
     title,
@@ -296,6 +310,8 @@ function validateMenuIdeaJson(
     keyIngredients,
     steps,
     ...(tm !== undefined ? { timeMinutes: tm } : {}),
+    ...(cal !== undefined ? { caloriesKcal: cal } : {}),
+    ...(salt !== undefined ? { saltG: salt } : {}),
   };
 }
 
@@ -1041,6 +1057,8 @@ function buildFallbackIdeaJson(category: Category, kojiType: KojiType, assigned:
         `好みでごまやこしょうを足して完成`,
       ],
       timeMinutes: 7,
+      caloriesKcal: 80,
+      saltG: 0.8,
     };
   }
 
@@ -1102,6 +1120,28 @@ function buildFallbackIdeaJson(category: Category, kojiType: KojiType, assigned:
     ],
   };
 
+  // カロリー・塩分の推定値（調理法によって変動）
+  const caloriesByDish: Record<string, number> = {
+    '和え': 120,
+    'ナムル': 100,
+    'サラダ': 150,
+    'マリネ': 130,
+    '炒め': 280,
+    'スープ': 180,
+    'みそ汁': 80,
+    '鍋': 350,
+  };
+  const saltByDish: Record<string, number> = {
+    '和え': 1.2,
+    'ナムル': 1.0,
+    'サラダ': 0.8,
+    'マリネ': 1.0,
+    '炒め': 1.8,
+    'スープ': 1.5,
+    'みそ汁': 1.6,
+    '鍋': 2.2,
+  };
+
   return {
     kojiType,
     title: `${ing1}の${kojiShort}${dishType}`,
@@ -1109,6 +1149,8 @@ function buildFallbackIdeaJson(category: Category, kojiType: KojiType, assigned:
     keyIngredients: [p, v, kojiShort].filter(Boolean),
     steps: stepsByDish[dishType] || stepsByDish['炒め'],
     timeMinutes,
+    caloriesKcal: caloriesByDish[dishType] || 200,
+    saltG: saltByDish[dishType] || 1.5,
   };
 }
 
@@ -1144,7 +1186,9 @@ async function generateThreeMenuIdeasForCategory(
     "summary": "要約（2〜3文、改行OK。自然な日本語）",
     "keyIngredients": ["主要材料", "こうじ"],
     "steps": ["手順1", "手順2", "手順3"],
-    "timeMinutes": 5
+    "timeMinutes": 5,
+    "caloriesKcal": 250,
+    "saltG": 1.5
   }
 ]`;
 
@@ -1175,6 +1219,11 @@ ${items
     return `${idx + 1}) kojiType: ${x.kojiType}\n- ${must}\n- 【調理法】必ず「${dishType}」にする（例: 〇〇の旨塩風こうじ${dishType}）\n- 料理名は「旨塩風こうじ/中華風こうじ/コンソメ風こうじ」の短縮名を必ず含める\n- summaryは2〜3文で自然に（最後を無理に「！」にしない）\n- stepsは3〜5個で簡潔に`;
   })
   .join('\n\n')}
+
+【栄養情報】各メニューに以下を推定して含める：
+- caloriesKcal: 1人前のカロリー目安（kcal、100〜800程度）
+- saltG: 1人前の塩分目安（g、0.5〜3.0程度）
+※材料と調味料から概算で出す。正確でなくてよいが妥当な範囲で
 
 【出力JSONの例（この形に厳密に合わせる）】
 ${schemaHint}

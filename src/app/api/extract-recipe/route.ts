@@ -31,6 +31,12 @@ interface ExtractedRecipe {
   ingredients: Array<{ name: string; amount: string }>;
   steps: Array<{ order: number; description: string }>;
   tips?: string;
+  // 栄養情報（AIが推定）
+  calories?: number;
+  salt_g?: number;
+  cooking_time_min?: number;
+  // タグ（材料から自動判定）
+  tags?: string[];
 }
 
 export async function POST(request: NextRequest) {
@@ -82,6 +88,27 @@ ${conversationText}
 - 4-6ステップ → "ふつう"
 - 7ステップ以上、または複雑な調理 → "むずかしい"
 
+【栄養情報の推定】
+材料と調味料から以下を概算で推定してください：
+- calories: 1人前のカロリー（kcal、100〜800程度）
+- salt_g: 1人前の塩分（g、0.5〜3.0程度）
+- cooking_time_min: 調理時間の目安（分、5〜60程度）
+
+【タグの自動判定】
+材料を見て、該当するタグをすべて選択してください（複数可）：
+- 魚: 魚介類を使用
+- 肉: 肉類を使用（鶏、豚、牛、ひき肉など）
+- 卵: 卵を使用
+- 野菜: 野菜がメインまたは多め
+- 時短: 15分以内で作れる
+- 作り置き: 保存がきく
+- おつまみ: お酒に合う
+- ダイエット: 低カロリー・ヘルシー
+- 主菜: メインディッシュ
+- 副菜: サブのおかず
+- スープ: 汁物
+- サラダ: サラダ系
+
 【出力形式】
 {
   "title": "料理名（【】は除去）",
@@ -94,7 +121,11 @@ ${conversationText}
   "steps": [
     { "order": 1, "description": "手順の説明（①などの番号は除去）" }
   ],
-  "tips": "コツやポイント（ユーザーが書いたものがあればそのまま使用）"
+  "tips": "コツやポイント（ユーザーが書いたものがあればそのまま使用）",
+  "calories": 300,
+  "salt_g": 1.5,
+  "cooking_time_min": 15,
+  "tags": ["肉", "主菜", "時短"]
 }
 
 【重要】
