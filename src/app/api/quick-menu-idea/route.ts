@@ -1133,27 +1133,43 @@ function buildFallbackIdeaJson(category: Category, kojiType: KojiType, assigned:
     ],
   };
 
-  // カロリー・塩分の推定値（調理法とタンパク質の有無で変動）
+  // カロリー・塩分の推定値（材料と調理法から計算）
   const proteinCalories: Record<string, number> = {
     '鶏むね肉': 110, '鶏もも肉': 200, '豚バラ': 390, '豚こま': 220,
     '牛肉': 250, 'ひき肉': 220, 'ツナ': 70, '豆腐': 55, '卵': 75,
-    'エビ': 80, 'イカ': 85, 'さば': 200, '鮭': 130,
+    'エビ': 80, 'イカ': 85, 'さば': 200, '鮭': 130, 'ベーコン': 200,
+    'ウインナー': 180, '油揚げ': 90, 'しらす': 40, '鶏肉': 150,
   };
-  const proteinCal = p ? (proteinCalories[p] || 150) : 0;
+  const veggieCalories: Record<string, number> = {
+    'もやし': 20, 'きゅうり': 15, 'キャベツ': 25, 'ほうれん草': 20,
+    'ブロッコリー': 35, 'なす': 22, 'ピーマン': 22, 'トマト': 20,
+    'れんこん': 66, 'きくらげ': 14, 'きのこ': 20, 'しめじ': 18,
+    'えのき': 22, 'まいたけ': 16, 'エリンギ': 24, '大根': 18,
+    'にんじん': 37, '玉ねぎ': 37, 'ごぼう': 58, 'アスパラ': 22,
+    '白菜': 14, '長ねぎ': 28, 'チンゲン菜': 10, 'ニラ': 20,
+    'じゃがいも': 76, 'わかめ': 5, 'なめこ': 15,
+  };
   
-  const baseCalByDish: Record<string, number> = {
-    '和え': 60, 'ナムル': 50, 'サラダ': 70, 'マリネ': 60,
-    '炒め': 100, 'スープ': 80, 'みそ汁': 40, '鍋': 120,
+  const proteinCal = p ? (proteinCalories[p] || 120) : 0;
+  const veggieCal = v ? (veggieCalories[v] || 25) : 0;
+  
+  // 調理法による追加カロリー（油の使用量など）
+  const cookingCalByDish: Record<string, number> = {
+    '和え': 25, 'ナムル': 50, 'サラダ': 30, 'マリネ': 20,
+    '炒め': 80, 'スープ': 15, 'みそ汁': 10, '鍋': 20,
   };
+  // 麹調味料分（大さじ1〜2で15〜30kcal）
+  const kojiCal = 20;
+  
   const saltByDish: Record<string, number> = {
-    '和え': 1.1, 'ナムル': 1.0, 'サラダ': 0.8, 'マリネ': 0.9,
-    '炒め': 1.8, 'スープ': 1.5, 'みそ汁': 1.6, '鍋': 2.0,
+    '和え': 0.9, 'ナムル': 1.1, 'サラダ': 0.7, 'マリネ': 0.8,
+    '炒め': 1.6, 'スープ': 1.4, 'みそ汁': 1.5, '鍋': 1.8,
   };
   
-  // ランダムに±15%程度変動を加える（同じ調理法でも異なる値に）
-  const variation = 0.85 + Math.random() * 0.3; // 0.85〜1.15
-  const finalCalories = Math.round((proteinCal + (baseCalByDish[dishType] || 80)) * variation);
-  const finalSalt = Math.round((saltByDish[dishType] || 1.5) * variation * 10) / 10;
+  // ランダムに±10%程度変動を加える（同じ調理法でも異なる値に）
+  const variation = 0.9 + Math.random() * 0.2; // 0.9〜1.1
+  const finalCalories = Math.round((proteinCal + veggieCal + (cookingCalByDish[dishType] || 50) + kojiCal) * variation);
+  const finalSalt = Math.round((saltByDish[dishType] || 1.2) * variation * 10) / 10;
 
   return {
     kojiType,
@@ -1233,13 +1249,27 @@ ${items
   })
   .join('\n\n')}
 
-【栄養情報】各メニューに以下を必ず含める（必須）：
-- timeMinutes: 調理時間（分、5〜30程度）※材料の切り方や調理法で変動させる
-- caloriesKcal: 1人前のカロリー目安（kcal）※材料ごとに異なる値にする
-  - 野菜のみ: 50〜150kcal、肉入り: 200〜400kcal、炒め物: 250〜350kcal
-- saltG: 1人前の塩分目安（g）※調理法で変動させる
-  - 和え物: 0.8〜1.2g、炒め物: 1.5〜2.0g、スープ: 1.2〜1.8g
-【重要】3件それぞれで栄養情報は異なる値にすること！同じ値にしない
+【栄養情報の計算】各メニューに以下を必ず含める（必須・省略不可）：
+
+■ timeMinutes（調理時間・分）を以下の基準で計算：
+- 和え物・ナムル: 5〜10分
+- 炒め物: 10〜15分
+- スープ・煮物: 15〜25分
+- 下処理が多い場合: +5分
+
+■ caloriesKcal（1人前カロリー・kcal）を材料から計算：
+- 野菜100g: 20〜40kcal、肉100g: 150〜300kcal、卵1個: 80kcal
+- こうじ調味料 大さじ1: 約15kcal
+- 油 大さじ1: 約110kcal
+- 合計を1人前として算出（2人分の半分）
+
+■ saltG（1人前塩分・g）を調理法と調味料から計算：
+- こうじ調味料 大さじ1: 約0.8〜1.0g
+- 和え物（大さじ1）: 0.8〜1.0g
+- 炒め物（大さじ1.5〜2）: 1.3〜1.8g
+- スープ（大さじ2〜3）: 1.5〜2.5g
+
+【重要】3件それぞれで栄養情報は異なる値にすること！材料と調理法から個別に計算する
 
 【出力JSONの例（この形に厳密に合わせる）】
 ${schemaHint}
@@ -1259,7 +1289,7 @@ ${schemaHint}
     const raw = await generateText(`${prompt}${a.extra}`, {
       model: 'gemini-3-flash-preview',
       temperature: a.temperature,
-      maxOutputTokens: 900,
+      maxOutputTokens: 1200,
     });
 
     const jsonText = extractJsonArray(raw);
