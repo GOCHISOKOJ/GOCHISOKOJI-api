@@ -81,42 +81,44 @@ function shuffle<T>(array: T[]): T[] {
 }
 
 // ============================================================
-// 調理法のバリエーション（カテゴリごとにランダム選択）
+// 麹タイプと調理法の相性マッピング（美味しさ重視・変な組み合わせ禁止）
 // ============================================================
-const DISH_TYPES_BY_CATEGORY: Record<string, string[]> = {
-  '5分で簡単レシピ': ['炒め', '和え', '焼き', 'レンチン蒸し', 'ナムル', 'サラダ'],
-  '材料1つでできる': ['和え', 'ナムル', 'サラダ', '焼き', 'レンチン蒸し', 'マリネ', 'おひたし'],
-  '主菜（メイン）': ['炒め', '焼き', '煮込み', '蒸し', '揚げ焼き', 'あんかけ', '照り焼き', '生姜焼き', 'ソテー'],
-  '副菜（サブ）': ['和え', 'サラダ', 'マリネ', 'ナムル', 'おひたし', '浅漬け', 'ぺろり'],
-  '汁物': ['スープ', 'みそ汁', '鍋', 'ポトフ', 'シチュー', 'ミネストローネ'],
+
+// 麹タイプごとの得意な調理法（必ず守る）
+const KOJI_DISH_TYPES: Record<KojiType, Record<string, string[]>> = {
+  '旨塩風こうじ調味料': {
+    '5分で簡単レシピ': ['和え', '焼き', 'ナムル'],
+    '材料1つでできる': ['和え', 'ナムル', 'おひたし', '浅漬け'],
+    '主菜（メイン）': ['焼き', '蒸し', '煮'],
+    '副菜（サブ）': ['和え', 'ナムル', 'おひたし', 'サラダ'],
+    '汁物': ['みそ汁', '鍋'],
+  },
+  '中華風こうじ調味料': {
+    '5分で簡単レシピ': ['炒め', '焼き'],
+    '材料1つでできる': ['炒め', 'ナムル', '和え'],
+    '主菜（メイン）': ['炒め', 'あんかけ', '焼き', '煮込み'],
+    '副菜（サブ）': ['ナムル', '和え', '炒め'],
+    '汁物': ['鍋', 'スープ'],
+  },
+  'コンソメ風こうじ調味料': {
+    '5分で簡単レシピ': ['ソテー', '焼き', 'サラダ'],
+    '材料1つでできる': ['ソテー', 'サラダ', 'マリネ'],
+    '主菜（メイン）': ['ソテー', '煮込み', '焼き', '蒸し'],
+    '副菜（サブ）': ['サラダ', 'マリネ', 'ソテー'],
+    '汁物': ['スープ', 'ポトフ', 'シチュー'],
+  },
 };
 
-function getRandomDishType(category: string): string {
-  const types = DISH_TYPES_BY_CATEGORY[category] || DISH_TYPES_BY_CATEGORY['主菜（メイン）'];
-  return types[Math.floor(Math.random() * types.length)];
-}
-
-// 麹タイプごとの得意な調理法（参考程度、必須ではない）
-const KOJI_PREFERRED_STYLES: Record<KojiType, string[]> = {
-  '旨塩風こうじ調味料': ['和え', 'ナムル', 'サラダ', 'おひたし', '蒸し', '焼き'],
-  '中華風こうじ調味料': ['炒め', 'あんかけ', '鍋', 'ナムル', '煮込み', '焼き'],
-  'コンソメ風こうじ調味料': ['スープ', 'ポトフ', 'シチュー', 'ソテー', '煮込み', 'サラダ'],
-};
-
-// カテゴリに応じて調理法をランダム選択（麹タイプの得意分野を少し考慮）
+// 麹タイプとカテゴリに応じた調理法を選択（必ず相性の良いものを選ぶ）
 function getDishTypeForKoji(category: Category, kojiType: KojiType): string {
-  const categoryTypes = DISH_TYPES_BY_CATEGORY[category] || [];
-  const kojiPreferred = KOJI_PREFERRED_STYLES[kojiType] || [];
-  
-  // 50%の確率で麹の得意な調理法を選ぶ、50%でカテゴリの調理法をランダム選択
-  if (Math.random() < 0.5 && kojiPreferred.length > 0) {
-    const overlapping = categoryTypes.filter(t => kojiPreferred.includes(t));
-    if (overlapping.length > 0) {
-      return overlapping[Math.floor(Math.random() * overlapping.length)];
-    }
+  const dishTypes = KOJI_DISH_TYPES[kojiType]?.[category];
+  if (dishTypes && dishTypes.length > 0) {
+    return dishTypes[Math.floor(Math.random() * dishTypes.length)];
   }
-  
-  return categoryTypes[Math.floor(Math.random() * categoryTypes.length)] || '炒め';
+  // フォールバック（通常は到達しない）
+  if (kojiType === '旨塩風こうじ調味料') return '和え';
+  if (kojiType === '中華風こうじ調味料') return '炒め';
+  return 'ソテー';
 }
 
 // カテゴリに応じた説明
@@ -906,18 +908,18 @@ async function generateMenuIdea(
 → この食材に最も合う汁物の種類を選んで提案すること
 ` : '';
 
-  // 今回選ばれた調理法（毎回ランダム）
-  const selectedDishType = getRandomDishType(category);
+  // 麹タイプに合った調理法を選択
+  const selectedDishType = getDishTypeForKoji(category as Category, kojiType as KojiType);
   
   const promptBase = `あなたは「志麻さん」のようなプロの家政婦です。
 GOCHISOKOJIのこうじ調味料を使って、家庭で簡単に作れる美味しいメニューを提案します。
 料理のプロとして、食材の組み合わせは絶対に間違えません。
 
-【季節】今は${seasonName}です。旬の食材を活かした料理を考えてください。
+【季節】今は${seasonName}です。旬の食材を活かしましょう。
 ${exclusionBlock}
 【カテゴリ】${categoryDesc}
 【使用する調味料】${kojiType}
-【おすすめの調理法】${selectedDishType}（ただし、食材に合えば他の調理法でもOK）
+【調理法】${selectedDishType}（この調理法で作ってください）
 ${soupKnowledge}
 【必須食材（絶対に変更不可）】
 ${category === '材料1つでできる' 
@@ -930,10 +932,16 @@ ${evidenceBlock || ''}
 
 ${candidateBlock}
 
-【麹調味料の特徴を活かすポイント】
-- 旨塩風こうじ：あっさりとした塩味とこうじの甘みが野菜の旨味を引き出す
-- 中華風こうじ：ニンニクと生姜の香りでご飯が進む濃厚な味わい
-- コンソメ風こうじ：洋風のコクと深みで野菜がたっぷり食べられる
+【麹調味料と調理法の相性ルール（厳守）】
+- 旨塩風こうじ → 和え物、ナムル、おひたし、焼き、みそ汁、鍋（あっさり系）
+- 中華風こうじ → 炒め物、あんかけ、ナムル、鍋、スープ（濃厚系）
+- コンソメ風こうじ → ソテー、スープ、ポトフ、シチュー、サラダ、マリネ（洋風系）
+
+【絶対禁止の組み合わせ】
+- ポトフ×旨塩風こうじ、ポトフ×中華風こうじ → 必ずコンソメ風こうじ
+- シチュー×旨塩風こうじ、シチュー×中華風こうじ → 必ずコンソメ風こうじ
+- みそ汁×中華風こうじ、みそ汁×コンソメ風こうじ → 必ず旨塩風こうじ
+- 炒め×コンソメ風こうじ → 中華風こうじまたは旨塩風こうじ
 
 【カテゴリの条件】
 ${requiredHints.length > 0 ? requiredHints.map((s) => `- ${s}`).join('\n') : '- （特になし）'}
@@ -944,8 +952,8 @@ ${requiredHints.length > 0 ? requiredHints.map((s) => `- ${s}`).join('\n') : '- 
 
 【料理名のルール（厳守）】
 - 「${kojiShort}」を必ず含める
-- 調理法を含める（〜炒め、〜焼き、〜スープ、〜サラダ、〜和え、〜煮込み、〜蒸し等）
-- 創造的で美味しそうな名前にする（定番だけでなく、新しい組み合わせも歓迎）
+- 調理法「${selectedDishType}」を含める
+- 定番で美味しそうな名前にする（変に冒険しない）
 ${category === '材料1つでできる'
   ? `- 必ず「${randomVeggie}」を料理名に含める
 - 例: 「${randomVeggie}の${kojiShort}${selectedDishType}」`
@@ -960,27 +968,26 @@ ${category === '材料1つでできる'
 【説明文のポイント】
 - 50〜80文字
 - ${kojiShort}の特徴（コク、旨味、香り）を活かした表現
-- 食感・香り・味わいを具体的に
-- 「${seasonName}にぴったり」など季節感を入れても良い
+- 手軽で美味しそうな印象を与える
 - 最後は「！」で締める
 出力:`;
 
   // 要件: 必ずGemini（gemini-3-flash-preview）で考案させる。
-  // 多様性を重視し、temperatureを高めに設定。形式/カテゴリ条件を満たさない場合は自動リトライ。
+  // 安定した美味しいメニューを重視。形式/カテゴリ条件を満たさない場合は自動リトライ。
   const attempts: Array<{ temperature: number; extra: string }> = [
-    { temperature: 1.0, extra: '\n【創造性を発揮してください】定番だけでなく、新しい組み合わせや意外性のある料理名も歓迎します。\n' },
+    { temperature: 0.85, extra: '' },
     {
-      temperature: 0.9,
+      temperature: 0.6,
       extra:
         '\n【追加の絶対条件】\n- 指定食材（必須食材）を料理名に必ず含める\n- 料理名は必ず完結させる（途中で終わらせない）\n- 出力は1行のみ\n',
     },
     {
-      temperature: 0.7,
+      temperature: 0.4,
       extra:
         '\n【不合格条件】\n- 「料理名。説明文」の形式でない\n- 末尾が「！」でない\n- カテゴリ条件（5分/材料1つ 等）を満たさない\n上記を1つでも満たさない場合は、修正してから出力する。\n',
     },
     {
-      temperature: 0.5,
+      temperature: 0.3,
       extra:
         '\n【最終確認】\n出力前に自分でチェックし、条件を満たすまで書き直す。\n',
     },
