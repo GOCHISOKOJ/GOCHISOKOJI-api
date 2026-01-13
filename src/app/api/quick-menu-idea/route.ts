@@ -1046,6 +1046,19 @@ function buildFallbackIdeaJson(category: Category, kojiType: KojiType, assigned:
     const dishForSingle = kojiType === '旨塩風こうじ調味料' ? '和え' 
       : kojiType === '中華風こうじ調味料' ? 'ナムル' 
       : 'マリネ';
+    
+    // 材料に応じた栄養情報の推定値
+    const vegCalories: Record<string, number> = {
+      'もやし': 40, 'きゅうり': 35, 'キャベツ': 55, 'ほうれん草': 50,
+      'ブロッコリー': 70, 'なす': 45, 'ピーマン': 50, 'トマト': 45,
+      'れんこん': 90, 'きくらげ': 35, 'きのこ': 40, 'しめじ': 45,
+      'えのき': 40, 'まいたけ': 35, 'エリンギ': 50, '大根': 40,
+      'にんじん': 60, '玉ねぎ': 65, 'ごぼう': 100, 'アスパラ': 55,
+    };
+    const baseCalories = vegCalories[veg] || 60;
+    // 調理法で若干変動（麹調味料分+30〜50kcal）
+    const calAdjust = dishForSingle === '和え' ? 30 : dishForSingle === 'ナムル' ? 45 : 35;
+    
     return {
       kojiType,
       title: `${veg}の${kojiShort}${dishForSingle}`,
@@ -1056,9 +1069,9 @@ function buildFallbackIdeaJson(category: Category, kojiType: KojiType, assigned:
         `${kojiShort}を絡めて味をなじませる`,
         `好みでごまやこしょうを足して完成`,
       ],
-      timeMinutes: 7,
-      caloriesKcal: 80,
-      saltG: 0.8,
+      timeMinutes: dishForSingle === 'マリネ' ? 10 : 7,
+      caloriesKcal: baseCalories + calAdjust,
+      saltG: dishForSingle === 'ナムル' ? 1.0 : dishForSingle === 'マリネ' ? 0.7 : 0.9,
     };
   }
 
@@ -1120,27 +1133,27 @@ function buildFallbackIdeaJson(category: Category, kojiType: KojiType, assigned:
     ],
   };
 
-  // カロリー・塩分の推定値（調理法によって変動）
-  const caloriesByDish: Record<string, number> = {
-    '和え': 120,
-    'ナムル': 100,
-    'サラダ': 150,
-    'マリネ': 130,
-    '炒め': 280,
-    'スープ': 180,
-    'みそ汁': 80,
-    '鍋': 350,
+  // カロリー・塩分の推定値（調理法とタンパク質の有無で変動）
+  const proteinCalories: Record<string, number> = {
+    '鶏むね肉': 110, '鶏もも肉': 200, '豚バラ': 390, '豚こま': 220,
+    '牛肉': 250, 'ひき肉': 220, 'ツナ': 70, '豆腐': 55, '卵': 75,
+    'エビ': 80, 'イカ': 85, 'さば': 200, '鮭': 130,
+  };
+  const proteinCal = p ? (proteinCalories[p] || 150) : 0;
+  
+  const baseCalByDish: Record<string, number> = {
+    '和え': 60, 'ナムル': 50, 'サラダ': 70, 'マリネ': 60,
+    '炒め': 100, 'スープ': 80, 'みそ汁': 40, '鍋': 120,
   };
   const saltByDish: Record<string, number> = {
-    '和え': 1.2,
-    'ナムル': 1.0,
-    'サラダ': 0.8,
-    'マリネ': 1.0,
-    '炒め': 1.8,
-    'スープ': 1.5,
-    'みそ汁': 1.6,
-    '鍋': 2.2,
+    '和え': 1.1, 'ナムル': 1.0, 'サラダ': 0.8, 'マリネ': 0.9,
+    '炒め': 1.8, 'スープ': 1.5, 'みそ汁': 1.6, '鍋': 2.0,
   };
+  
+  // ランダムに±15%程度変動を加える（同じ調理法でも異なる値に）
+  const variation = 0.85 + Math.random() * 0.3; // 0.85〜1.15
+  const finalCalories = Math.round((proteinCal + (baseCalByDish[dishType] || 80)) * variation);
+  const finalSalt = Math.round((saltByDish[dishType] || 1.5) * variation * 10) / 10;
 
   return {
     kojiType,
@@ -1149,8 +1162,8 @@ function buildFallbackIdeaJson(category: Category, kojiType: KojiType, assigned:
     keyIngredients: [p, v, kojiShort].filter(Boolean),
     steps: stepsByDish[dishType] || stepsByDish['炒め'],
     timeMinutes,
-    caloriesKcal: caloriesByDish[dishType] || 200,
-    saltG: saltByDish[dishType] || 1.5,
+    caloriesKcal: finalCalories,
+    saltG: finalSalt,
   };
 }
 
@@ -1220,10 +1233,13 @@ ${items
   })
   .join('\n\n')}
 
-【栄養情報】各メニューに以下を推定して含める：
-- caloriesKcal: 1人前のカロリー目安（kcal、100〜800程度）
-- saltG: 1人前の塩分目安（g、0.5〜3.0程度）
-※材料と調味料から概算で出す。正確でなくてよいが妥当な範囲で
+【栄養情報】各メニューに以下を必ず含める（必須）：
+- timeMinutes: 調理時間（分、5〜30程度）※材料の切り方や調理法で変動させる
+- caloriesKcal: 1人前のカロリー目安（kcal）※材料ごとに異なる値にする
+  - 野菜のみ: 50〜150kcal、肉入り: 200〜400kcal、炒め物: 250〜350kcal
+- saltG: 1人前の塩分目安（g）※調理法で変動させる
+  - 和え物: 0.8〜1.2g、炒め物: 1.5〜2.0g、スープ: 1.2〜1.8g
+【重要】3件それぞれで栄養情報は異なる値にすること！同じ値にしない
 
 【出力JSONの例（この形に厳密に合わせる）】
 ${schemaHint}
@@ -1235,7 +1251,7 @@ ${schemaHint}
     {
       temperature: 0.35,
       extra:
-        '\n【再確認】JSONのみ。3件すべてにkojiType/title/summary/keyIngredients/stepsを入れる。条件未達なら書き直してから出力する。',
+        '\n【再確認】JSONのみ。3件すべてにkojiType/title/summary/keyIngredients/steps/timeMinutes/caloriesKcal/saltGを入れる。栄養情報は3件それぞれ異なる値にする。',
     },
   ];
 
