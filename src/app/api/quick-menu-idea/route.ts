@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateText } from '@/lib/gemini/client';
 import { searchEvidence, type EvidenceItem } from '@/lib/rag';
+import { calculateQuickNutrition } from '@/lib/nutrition/calculator';
 
 export const runtime = 'nodejs';
 
@@ -1039,6 +1040,9 @@ function buildFallbackIdeaJson(category: Category, kojiType: KojiType, assigned:
   
   // 麹タイプごとの調理法を取得（3案が被らない）
   const dishType = getDishTypeForKoji(category, kojiType);
+  
+  // 統一された栄養計算ロジックを使用
+  const nutrition = calculateQuickNutrition(p, v, kojiType, category);
 
   if (category === '材料1つでできる') {
     const veg = v || 'もやし';
@@ -1046,18 +1050,6 @@ function buildFallbackIdeaJson(category: Category, kojiType: KojiType, assigned:
     const dishForSingle = kojiType === '旨塩風こうじ調味料' ? '和え' 
       : kojiType === '中華風こうじ調味料' ? 'ナムル' 
       : 'マリネ';
-    
-    // 材料に応じた栄養情報の推定値
-    const vegCalories: Record<string, number> = {
-      'もやし': 40, 'きゅうり': 35, 'キャベツ': 55, 'ほうれん草': 50,
-      'ブロッコリー': 70, 'なす': 45, 'ピーマン': 50, 'トマト': 45,
-      'れんこん': 90, 'きくらげ': 35, 'きのこ': 40, 'しめじ': 45,
-      'えのき': 40, 'まいたけ': 35, 'エリンギ': 50, '大根': 40,
-      'にんじん': 60, '玉ねぎ': 65, 'ごぼう': 100, 'アスパラ': 55,
-    };
-    const baseCalories = vegCalories[veg] || 60;
-    // 調理法で若干変動（麹調味料分+30〜50kcal）
-    const calAdjust = dishForSingle === '和え' ? 30 : dishForSingle === 'ナムル' ? 45 : 35;
     
     return {
       kojiType,
@@ -1069,14 +1061,13 @@ function buildFallbackIdeaJson(category: Category, kojiType: KojiType, assigned:
         `${kojiShort}を絡めて味をなじませる`,
         `好みでごまやこしょうを足して完成`,
       ],
-      timeMinutes: dishForSingle === 'マリネ' ? 10 : 7,
-      caloriesKcal: baseCalories + calAdjust,
-      saltG: dishForSingle === 'ナムル' ? 1.0 : dishForSingle === 'マリネ' ? 0.7 : 0.9,
+      timeMinutes: nutrition.timeMinutes,
+      caloriesKcal: nutrition.caloriesKcal,
+      saltG: nutrition.saltG,
     };
   }
 
   const ing1 = p ? `${p}と${v}` : v;
-  const timeMinutes = category === '5分で簡単レシピ' ? 5 : category === '汁物' ? 15 : 12;
   
   // 調理法に応じたsummaryとstepsを生成
   const summaryByDish: Record<string, string> = {
@@ -1133,53 +1124,15 @@ function buildFallbackIdeaJson(category: Category, kojiType: KojiType, assigned:
     ],
   };
 
-  // カロリー・塩分の推定値（材料と調理法から計算）
-  const proteinCalories: Record<string, number> = {
-    '鶏むね肉': 110, '鶏もも肉': 200, '豚バラ': 390, '豚こま': 220,
-    '牛肉': 250, 'ひき肉': 220, 'ツナ': 70, '豆腐': 55, '卵': 75,
-    'エビ': 80, 'イカ': 85, 'さば': 200, '鮭': 130, 'ベーコン': 200,
-    'ウインナー': 180, '油揚げ': 90, 'しらす': 40, '鶏肉': 150,
-  };
-  const veggieCalories: Record<string, number> = {
-    'もやし': 20, 'きゅうり': 15, 'キャベツ': 25, 'ほうれん草': 20,
-    'ブロッコリー': 35, 'なす': 22, 'ピーマン': 22, 'トマト': 20,
-    'れんこん': 66, 'きくらげ': 14, 'きのこ': 20, 'しめじ': 18,
-    'えのき': 22, 'まいたけ': 16, 'エリンギ': 24, '大根': 18,
-    'にんじん': 37, '玉ねぎ': 37, 'ごぼう': 58, 'アスパラ': 22,
-    '白菜': 14, '長ねぎ': 28, 'チンゲン菜': 10, 'ニラ': 20,
-    'じゃがいも': 76, 'わかめ': 5, 'なめこ': 15,
-  };
-  
-  const proteinCal = p ? (proteinCalories[p] || 120) : 0;
-  const veggieCal = v ? (veggieCalories[v] || 25) : 0;
-  
-  // 調理法による追加カロリー（油の使用量など）
-  const cookingCalByDish: Record<string, number> = {
-    '和え': 25, 'ナムル': 50, 'サラダ': 30, 'マリネ': 20,
-    '炒め': 80, 'スープ': 15, 'みそ汁': 10, '鍋': 20,
-  };
-  // 麹調味料分（大さじ1〜2で15〜30kcal）
-  const kojiCal = 20;
-  
-  const saltByDish: Record<string, number> = {
-    '和え': 0.9, 'ナムル': 1.1, 'サラダ': 0.7, 'マリネ': 0.8,
-    '炒め': 1.6, 'スープ': 1.4, 'みそ汁': 1.5, '鍋': 1.8,
-  };
-  
-  // ランダムに±10%程度変動を加える（同じ調理法でも異なる値に）
-  const variation = 0.9 + Math.random() * 0.2; // 0.9〜1.1
-  const finalCalories = Math.round((proteinCal + veggieCal + (cookingCalByDish[dishType] || 50) + kojiCal) * variation);
-  const finalSalt = Math.round((saltByDish[dishType] || 1.2) * variation * 10) / 10;
-
   return {
     kojiType,
     title: `${ing1}の${kojiShort}${dishType}`,
     summary: summaryByDish[dishType] || summaryByDish['炒め'],
     keyIngredients: [p, v, kojiShort].filter(Boolean),
     steps: stepsByDish[dishType] || stepsByDish['炒め'],
-    timeMinutes,
-    caloriesKcal: finalCalories,
-    saltG: finalSalt,
+    timeMinutes: nutrition.timeMinutes,
+    caloriesKcal: nutrition.caloriesKcal,
+    saltG: nutrition.saltG,
   };
 }
 

@@ -1,6 +1,7 @@
 // 会話からレシピを抽出するAPI
 import { NextRequest, NextResponse } from 'next/server';
 import { generateJSON } from '@/lib/gemini/client';
+import { calculateDetailedNutrition } from '@/lib/nutrition/calculator';
 
 export const runtime = 'nodejs';
 
@@ -136,6 +137,20 @@ ${conversationText}
 
     // Gemini APIでレシピを抽出
     const recipe = await generateJSON<ExtractedRecipe>(prompt);
+
+    // 統一された栄養計算ロジックで上書き（一貫性を担保）
+    if (recipe && recipe.ingredients) {
+      const nutrition = calculateDetailedNutrition(
+        recipe.ingredients,
+        recipe.koji_type,
+        recipe.steps?.map(s => s.description)
+      );
+      
+      // 計算結果で上書き（AIの推定より成分表ベースの計算を優先）
+      recipe.calories = nutrition.caloriesKcal;
+      recipe.salt_g = nutrition.saltG;
+      recipe.cooking_time_min = nutrition.timeMinutes;
+    }
 
     // レスポンスを返す
     return NextResponse.json({
