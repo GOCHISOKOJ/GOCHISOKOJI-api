@@ -27,29 +27,96 @@ type KojiType = (typeof KOJI_TYPES)[number];
 const CATEGORIES = ['5分で簡単レシピ', '材料1つでできる', '主菜（メイン）', '副菜（サブ）', '汁物'];
 type Category = (typeof CATEGORIES)[number];
 
-// 麹タイプごとの調理法（3案の調理法が被らないようにする）
-const DISH_TYPE_BY_KOJI: Record<KojiType, string> = {
-  '旨塩風こうじ調味料': '和え',      // あっさり系: 和え物、ナムル、マリネ
-  '中華風こうじ調味料': '炒め',      // 濃厚系: 炒め物、あんかけ
-  'コンソメ風こうじ調味料': 'スープ', // 洋風系: スープ、煮込み
+// ============================================================
+// 季節の旬食材（毎回ランダムに選ばれる）
+// ============================================================
+function getCurrentSeason(): 'spring' | 'summer' | 'autumn' | 'winter' {
+  const month = new Date().getMonth() + 1;
+  if (month >= 3 && month <= 5) return 'spring';
+  if (month >= 6 && month <= 8) return 'summer';
+  if (month >= 9 && month <= 11) return 'autumn';
+  return 'winter';
+}
+
+const SEASONAL_VEGGIES: Record<string, string[]> = {
+  spring: ['キャベツ', '新じゃがいも', '新玉ねぎ', 'アスパラガス', '菜の花', 'たけのこ', 'スナップえんどう', 'そら豆', 'セロリ', 'レタス'],
+  summer: ['なす', 'トマト', 'きゅうり', 'ピーマン', 'ゴーヤ', 'オクラ', 'ズッキーニ', 'とうもろこし', 'みょうが', '大葉'],
+  autumn: ['さつまいも', 'かぼちゃ', 'きのこ', 'れんこん', 'ごぼう', '長ねぎ', '里芋', 'しめじ', 'まいたけ', 'エリンギ'],
+  winter: ['白菜', '大根', 'ほうれん草', '小松菜', 'ブロッコリー', 'かぶ', '長ねぎ', '春菊', '水菜', 'にんじん'],
 };
 
-// カテゴリ×麹タイプで調理法を決定（汁物は全てスープ系にする）
+const SEASONAL_PROTEINS: Record<string, string[]> = {
+  spring: ['鯛', 'あさり', '鰆', '豚こま', '鶏むね肉', '卵', '豆腐', '厚揚げ'],
+  summer: ['豚バラ', '鶏もも肉', 'アジ', 'イワシ', 'タコ', 'イカ', 'エビ', '卵'],
+  autumn: ['鮭', 'さば', 'さんま', '鶏もも肉', '豚こま', 'ひき肉', 'きのこ', '卵'],
+  winter: ['ぶり', 'たら', '鱈', '豚バラ', '鶏もも肉', 'ひき肉', '牡蠣', 'ホタテ'],
+};
+
+// 通年使える食材
+const YEAR_ROUND_VEGGIES = ['もやし', 'にんじん', '玉ねぎ', 'キャベツ', 'ニラ', 'チンゲン菜', 'えのき', 'しめじ'];
+const YEAR_ROUND_PROTEINS = ['豚こま', '豚バラ', '鶏もも肉', '鶏むね肉', 'ひき肉', '卵', '豆腐', 'ツナ', 'ベーコン', 'ウインナー'];
+
+function getSeasonalIngredients(): { proteins: string[]; veggies: string[] } {
+  const season = getCurrentSeason();
+  const seasonalVeggies = SEASONAL_VEGGIES[season] || SEASONAL_VEGGIES.winter;
+  const seasonalProteins = SEASONAL_PROTEINS[season] || SEASONAL_PROTEINS.winter;
+  
+  // 旬食材70% + 通年食材30%の割合でシャッフル
+  const veggies = [...seasonalVeggies, ...YEAR_ROUND_VEGGIES.slice(0, 3)];
+  const proteins = [...seasonalProteins, ...YEAR_ROUND_PROTEINS.slice(0, 4)];
+  
+  return {
+    proteins: shuffle(proteins),
+    veggies: shuffle(veggies),
+  };
+}
+
+function shuffle<T>(array: T[]): T[] {
+  const arr = [...array];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+// ============================================================
+// 調理法のバリエーション（カテゴリごとにランダム選択）
+// ============================================================
+const DISH_TYPES_BY_CATEGORY: Record<string, string[]> = {
+  '5分で簡単レシピ': ['炒め', '和え', '焼き', 'レンチン蒸し', 'ナムル', 'サラダ'],
+  '材料1つでできる': ['和え', 'ナムル', 'サラダ', '焼き', 'レンチン蒸し', 'マリネ', 'おひたし'],
+  '主菜（メイン）': ['炒め', '焼き', '煮込み', '蒸し', '揚げ焼き', 'あんかけ', '照り焼き', '生姜焼き', 'ソテー'],
+  '副菜（サブ）': ['和え', 'サラダ', 'マリネ', 'ナムル', 'おひたし', '浅漬け', 'ぺろり'],
+  '汁物': ['スープ', 'みそ汁', '鍋', 'ポトフ', 'シチュー', 'ミネストローネ'],
+};
+
+function getRandomDishType(category: string): string {
+  const types = DISH_TYPES_BY_CATEGORY[category] || DISH_TYPES_BY_CATEGORY['主菜（メイン）'];
+  return types[Math.floor(Math.random() * types.length)];
+}
+
+// 麹タイプごとの得意な調理法（参考程度、必須ではない）
+const KOJI_PREFERRED_STYLES: Record<KojiType, string[]> = {
+  '旨塩風こうじ調味料': ['和え', 'ナムル', 'サラダ', 'おひたし', '蒸し', '焼き'],
+  '中華風こうじ調味料': ['炒め', 'あんかけ', '鍋', 'ナムル', '煮込み', '焼き'],
+  'コンソメ風こうじ調味料': ['スープ', 'ポトフ', 'シチュー', 'ソテー', '煮込み', 'サラダ'],
+};
+
+// カテゴリに応じて調理法をランダム選択（麹タイプの得意分野を少し考慮）
 function getDishTypeForKoji(category: Category, kojiType: KojiType): string {
-  if (category === '汁物') {
-    // 汁物カテゴリは麹タイプに関係なくスープ系
-    if (kojiType === '旨塩風こうじ調味料') return 'みそ汁';
-    if (kojiType === '中華風こうじ調味料') return '鍋';
-    return 'スープ';
+  const categoryTypes = DISH_TYPES_BY_CATEGORY[category] || [];
+  const kojiPreferred = KOJI_PREFERRED_STYLES[kojiType] || [];
+  
+  // 50%の確率で麹の得意な調理法を選ぶ、50%でカテゴリの調理法をランダム選択
+  if (Math.random() < 0.5 && kojiPreferred.length > 0) {
+    const overlapping = categoryTypes.filter(t => kojiPreferred.includes(t));
+    if (overlapping.length > 0) {
+      return overlapping[Math.floor(Math.random() * overlapping.length)];
+    }
   }
-  if (category === '副菜（サブ）') {
-    // 副菜は軽めの調理法
-    if (kojiType === '旨塩風こうじ調味料') return '和え';
-    if (kojiType === '中華風こうじ調味料') return 'ナムル';
-    return 'サラダ';
-  }
-  // その他は基本マッピングを使用
-  return DISH_TYPE_BY_KOJI[kojiType];
+  
+  return categoryTypes[Math.floor(Math.random() * categoryTypes.length)] || '炒め';
 }
 
 // カテゴリに応じた説明
@@ -680,14 +747,31 @@ async function generateMenuIdea(
     ? `\n${exclusionHint}\n`
     : '';
 
-  // 美味しい組み合わせを優先（ランダムではなく、実証済みのペアリング）
-  const TASTY_COMBOS: Record<string, Array<{ protein: string; veggie: string; style?: string }>> = {
+  // ============================================================
+  // 旬の食材を使った組み合わせを動的に生成
+  // ============================================================
+  const seasonal = getSeasonalIngredients();
+  const season = getCurrentSeason();
+  const seasonName = { spring: '春', summer: '夏', autumn: '秋', winter: '冬' }[season];
+  
+  // カテゴリ別の美味しい組み合わせ（大幅に増量 + 季節食材を動的に追加）
+  const BASE_COMBOS: Record<string, Array<{ protein: string; veggie: string }>> = {
     '5分で簡単レシピ': [
       { protein: '豚こま', veggie: 'キャベツ' },
       { protein: '卵', veggie: 'もやし' },
       { protein: 'ベーコン', veggie: 'ほうれん草' },
       { protein: '豆腐', veggie: 'ニラ' },
       { protein: 'ツナ', veggie: 'きゅうり' },
+      { protein: '鶏むね肉', veggie: 'ピーマン' },
+      { protein: 'ウインナー', veggie: '玉ねぎ' },
+      { protein: '卵', veggie: 'トマト' },
+      { protein: 'ベーコン', veggie: 'アスパラガス' },
+      { protein: '豚バラ', veggie: 'なす' },
+      { protein: 'ツナ', veggie: 'レタス' },
+      { protein: '厚揚げ', veggie: 'チンゲン菜' },
+      { protein: '卵', veggie: 'ニラ' },
+      { protein: 'ベーコン', veggie: 'きのこ' },
+      { protein: '豚こま', veggie: 'もやし' },
     ],
     '材料1つでできる': [
       { protein: '', veggie: 'もやし' },
@@ -695,13 +779,41 @@ async function generateMenuIdea(
       { protein: '', veggie: 'にんじん' },
       { protein: '', veggie: 'ブロッコリー' },
       { protein: '', veggie: 'なす' },
+      { protein: '', veggie: 'きゅうり' },
+      { protein: '', veggie: 'ほうれん草' },
+      { protein: '', veggie: '小松菜' },
+      { protein: '', veggie: 'ピーマン' },
+      { protein: '', veggie: '大根' },
+      { protein: '', veggie: 'かぼちゃ' },
+      { protein: '', veggie: 'れんこん' },
+      { protein: '', veggie: 'ごぼう' },
+      { protein: '', veggie: '長ねぎ' },
+      { protein: '', veggie: 'きのこ' },
+      { protein: '', veggie: '白菜' },
+      { protein: '', veggie: 'オクラ' },
+      { protein: '', veggie: 'アスパラガス' },
     ],
     '主菜（メイン）': [
       { protein: '鶏もも肉', veggie: 'ピーマン' },
       { protein: '豚バラ', veggie: '白菜' },
       { protein: '鮭', veggie: 'きのこ' },
       { protein: 'ひき肉', veggie: '玉ねぎ' },
-      { protein: 'えび', veggie: 'ブロッコリー' },
+      { protein: 'エビ', veggie: 'ブロッコリー' },
+      { protein: '鶏むね肉', veggie: 'なす' },
+      { protein: '豚こま', veggie: 'キャベツ' },
+      { protein: 'さば', veggie: '大根' },
+      { protein: '鶏もも肉', veggie: 'れんこん' },
+      { protein: '豚バラ', veggie: 'もやし' },
+      { protein: 'ぶり', veggie: '大根' },
+      { protein: '鶏もも肉', veggie: 'かぼちゃ' },
+      { protein: 'ひき肉', veggie: 'ピーマン' },
+      { protein: '豚こま', veggie: 'なす' },
+      { protein: 'たら', veggie: '白菜' },
+      { protein: '鶏もも肉', veggie: '長ねぎ' },
+      { protein: '豚バラ', veggie: 'にんじん' },
+      { protein: 'イカ', veggie: 'セロリ' },
+      { protein: '牛肉', veggie: 'ごぼう' },
+      { protein: '鶏むね肉', veggie: 'アスパラガス' },
     ],
     '副菜（サブ）': [
       { protein: '', veggie: 'ブロッコリー' },
@@ -709,6 +821,19 @@ async function generateMenuIdea(
       { protein: '', veggie: 'にんじん' },
       { protein: '', veggie: '小松菜' },
       { protein: 'ベーコン', veggie: 'ほうれん草' },
+      { protein: '', veggie: 'もやし' },
+      { protein: '', veggie: 'きゅうり' },
+      { protein: '', veggie: 'トマト' },
+      { protein: '', veggie: 'なす' },
+      { protein: '', veggie: 'ピーマン' },
+      { protein: 'ちくわ', veggie: 'きゅうり' },
+      { protein: 'ツナ', veggie: '大根' },
+      { protein: '', veggie: 'かぶ' },
+      { protein: '', veggie: '水菜' },
+      { protein: '', veggie: 'れんこん' },
+      { protein: '', veggie: 'ごぼう' },
+      { protein: 'しらす', veggie: '大根' },
+      { protein: '', veggie: 'オクラ' },
     ],
     '汁物': [
       { protein: '鶏肉', veggie: '白菜' },
@@ -716,8 +841,37 @@ async function generateMenuIdea(
       { protein: 'ウインナー', veggie: 'キャベツ' },
       { protein: '豆腐', veggie: 'わかめ' },
       { protein: 'ベーコン', veggie: 'じゃがいも' },
+      { protein: '鶏肉', veggie: 'きのこ' },
+      { protein: '豚バラ', veggie: '白菜' },
+      { protein: '油揚げ', veggie: '大根' },
+      { protein: '卵', veggie: 'トマト' },
+      { protein: 'ベーコン', veggie: '玉ねぎ' },
+      { protein: '鶏肉', veggie: 'にんじん' },
+      { protein: 'ウインナー', veggie: 'にんじん' },
+      { protein: '豆腐', veggie: 'なめこ' },
+      { protein: '鶏肉', veggie: 'ブロッコリー' },
+      { protein: 'あさり', veggie: 'キャベツ' },
     ],
   };
+  
+  // 季節の食材を動的に追加（毎回違う組み合わせになる）
+  function getDynamicCombos(category: string): Array<{ protein: string; veggie: string }> {
+    const baseCombos = BASE_COMBOS[category] || BASE_COMBOS['主菜（メイン）'];
+    const dynamicCombos: Array<{ protein: string; veggie: string }> = [];
+    
+    // 季節の食材から3-5個の組み合わせを動的に生成
+    const numDynamic = 3 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < numDynamic; i++) {
+      const veggie = seasonal.veggies[i % seasonal.veggies.length];
+      const protein = category === '材料1つでできる' || category === '副菜（サブ）' && Math.random() < 0.5
+        ? ''
+        : seasonal.proteins[i % seasonal.proteins.length];
+      dynamicCombos.push({ protein, veggie });
+    }
+    
+    // ベース + 動的組み合わせをシャッフルして返す
+    return shuffle([...baseCombos, ...dynamicCombos]);
+  }
   
   // 汁物の場合はsoupIngredientsを優先（汁物タイプと食材の整合性を保つ）
   let randomProtein: string;
@@ -727,7 +881,7 @@ async function generateMenuIdea(
     randomProtein = soupIngredients.protein;
     randomVeggie = soupIngredients.veggie;
   } else {
-    const combosForCategory = TASTY_COMBOS[category] || TASTY_COMBOS['主菜（メイン）'];
+    const combosForCategory = getDynamicCombos(category);
     const selectedCombo = combosForCategory[Math.floor(Math.random() * combosForCategory.length)];
     randomProtein = assignedIngredients?.protein || selectedCombo.protein;
     randomVeggie = assignedIngredients?.veggie || selectedCombo.veggie;
@@ -752,12 +906,18 @@ async function generateMenuIdea(
 → この食材に最も合う汁物の種類を選んで提案すること
 ` : '';
 
+  // 今回選ばれた調理法（毎回ランダム）
+  const selectedDishType = getRandomDishType(category);
+  
   const promptBase = `あなたは「志麻さん」のようなプロの家政婦です。
 GOCHISOKOJIのこうじ調味料を使って、家庭で簡単に作れる美味しいメニューを提案します。
 料理のプロとして、食材の組み合わせは絶対に間違えません。
+
+【季節】今は${seasonName}です。旬の食材を活かした料理を考えてください。
 ${exclusionBlock}
 【カテゴリ】${categoryDesc}
 【使用する調味料】${kojiType}
+【おすすめの調理法】${selectedDishType}（ただし、食材に合えば他の調理法でもOK）
 ${soupKnowledge}
 【必須食材（絶対に変更不可）】
 ${category === '材料1つでできる' 
@@ -770,6 +930,11 @@ ${evidenceBlock || ''}
 
 ${candidateBlock}
 
+【麹調味料の特徴を活かすポイント】
+- 旨塩風こうじ：あっさりとした塩味とこうじの甘みが野菜の旨味を引き出す
+- 中華風こうじ：ニンニクと生姜の香りでご飯が進む濃厚な味わい
+- コンソメ風こうじ：洋風のコクと深みで野菜がたっぷり食べられる
+
 【カテゴリの条件】
 ${requiredHints.length > 0 ? requiredHints.map((s) => `- ${s}`).join('\n') : '- （特になし）'}
 
@@ -779,37 +944,43 @@ ${requiredHints.length > 0 ? requiredHints.map((s) => `- ${s}`).join('\n') : '- 
 
 【料理名のルール（厳守）】
 - 「${kojiShort}」を必ず含める
-- 何料理かわかる名前にする（〜炒め、〜スープ、〜サラダ等）
+- 調理法を含める（〜炒め、〜焼き、〜スープ、〜サラダ、〜和え、〜煮込み、〜蒸し等）
+- 創造的で美味しそうな名前にする（定番だけでなく、新しい組み合わせも歓迎）
 ${category === '材料1つでできる'
   ? `- 必ず「${randomVeggie}」を料理名に含める
-- 例: 「${randomVeggie}の${kojiShort}和え」「${randomVeggie}の${kojiShort}ナムル」`
+- 例: 「${randomVeggie}の${kojiShort}${selectedDishType}」`
   : randomProtein 
     ? `- 必ず「${randomProtein}」と「${randomVeggie}」を料理名に含める
-- 例: 「${randomProtein}と${randomVeggie}の${kojiShort}炒め」`
+- 例: 「${randomProtein}と${randomVeggie}の${kojiShort}${selectedDishType}」`
     : `- 必ず「${randomVeggie}」を料理名に含める
-- 例: 「${randomVeggie}の${kojiShort}サラダ」「${randomVeggie}の${kojiShort}和え」`}
+- 例: 「${randomVeggie}の${kojiShort}${selectedDishType}」`}
 
 【絶対禁止】指定食材以外の食材を料理名に使わないこと
 
-【説明文】50〜80文字。食感・香り・コクを伝える。最後は「！」
+【説明文のポイント】
+- 50〜80文字
+- ${kojiShort}の特徴（コク、旨味、香り）を活かした表現
+- 食感・香り・味わいを具体的に
+- 「${seasonName}にぴったり」など季節感を入れても良い
+- 最後は「！」で締める
 出力:`;
 
-  // 要件: 必ずGemini（gemini-3-flash-preview）で考案させる。テンプレの手動フォールバックはしない。
-  // 形式/カテゴリ条件を満たさない場合は自動リトライし、最後まで満たせなければ（選定済み食材を使った）安全な1行へ補正する。
+  // 要件: 必ずGemini（gemini-3-flash-preview）で考案させる。
+  // 多様性を重視し、temperatureを高めに設定。形式/カテゴリ条件を満たさない場合は自動リトライ。
   const attempts: Array<{ temperature: number; extra: string }> = [
-    { temperature: 0.85, extra: '' },
+    { temperature: 1.0, extra: '\n【創造性を発揮してください】定番だけでなく、新しい組み合わせや意外性のある料理名も歓迎します。\n' },
     {
-      temperature: 0.55,
+      temperature: 0.9,
       extra:
         '\n【追加の絶対条件】\n- 指定食材（必須食材）を料理名に必ず含める\n- 料理名は必ず完結させる（途中で終わらせない）\n- 出力は1行のみ\n',
     },
     {
-      temperature: 0.35,
+      temperature: 0.7,
       extra:
         '\n【不合格条件】\n- 「料理名。説明文」の形式でない\n- 末尾が「！」でない\n- カテゴリ条件（5分/材料1つ 等）を満たさない\n上記を1つでも満たさない場合は、修正してから出力する。\n',
     },
     {
-      temperature: 0.25,
+      temperature: 0.5,
       extra:
         '\n【最終確認】\n出力前に自分でチェックし、条件を満たすまで書き直す。\n',
     },
