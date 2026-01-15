@@ -128,13 +128,21 @@ export async function POST(request: NextRequest) {
       auth: { autoRefreshToken: false, persistSession: false },
     });
     
-    // タグまたは栄養情報が空の投稿を取得
-    const { data: posts, error: fetchError } = await adminSupabase
+    // 更新対象のフィールドを指定（デフォルトはタグと栄養情報のみ）
+    const updateDescription = body.updateDescription === true;
+    
+    // 投稿を取得（updateDescriptionの場合は全投稿、それ以外はタグ・栄養情報が空の投稿）
+    let query = adminSupabase
       .from('posts')
       .select('id, title, description, ingredients, steps, koji_type, tags, calories, salt_g, cooking_time_min')
-      .or('tags.is.null,calories.is.null,salt_g.is.null,cooking_time_min.is.null')
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
+    
+    if (!updateDescription) {
+      query = query.or('tags.is.null,calories.is.null,salt_g.is.null,cooking_time_min.is.null');
+    }
+    
+    const { data: posts, error: fetchError } = await query;
     
     if (fetchError) {
       console.error('[backfill-tags] Fetch error:', fetchError);
@@ -153,6 +161,7 @@ export async function POST(request: NextRequest) {
       calories: number;
       salt_g: number;
       cooking_time_min: number;
+      description?: string;
       updated: boolean;
     }> = [];
     
@@ -204,6 +213,20 @@ export async function POST(request: NextRequest) {
           updateData.cooking_time_min = nutrition.timeMinutes;
         }
         
+        // descriptionを材料名から生成（updateDescriptionオプションが有効な場合）
+        if (updateDescription) {
+          const ingredientNames = (post.ingredients || [])
+            .map((i: any) => {
+              if (typeof i === 'string') return i.trim();
+              return (i?.name || '').trim();
+            })
+            .filter(Boolean);
+          
+          if (ingredientNames.length > 0) {
+            updateData.description = ingredientNames.join('、');
+          }
+        }
+        
         results.push({
           id: post.id,
           title: post.title,
@@ -211,6 +234,7 @@ export async function POST(request: NextRequest) {
           calories: updateData.calories ?? post.calories,
           salt_g: updateData.salt_g ?? post.salt_g,
           cooking_time_min: updateData.cooking_time_min ?? post.cooking_time_min,
+          description: updateData.description || post.description,
           updated: Object.keys(updateData).length > 0,
         });
         
