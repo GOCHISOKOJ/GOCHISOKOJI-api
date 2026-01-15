@@ -65,17 +65,34 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // 1. ユーザーの投稿を削除
-    const { error: postsError, count: postsCount } = await adminSupabase.from('posts').delete().eq('user_id', user.id);
-    console.log('[delete-account] Posts deleted:', { error: postsError?.message, count: postsCount });
+    // 削除前の件数を確認
+    const { count: postsCountBefore } = await adminSupabase.from('posts').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
+    const { count: likesCountBefore } = await adminSupabase.from('likes').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
+    console.log('[delete-account] Before deletion:', { posts: postsCountBefore, likes: likesCountBefore });
+
+    // 1. ユーザーの投稿を削除（select()を使用してRLSをバイパス）
+    const { error: postsError } = await adminSupabase.from('posts').delete().eq('user_id', user.id);
+    if (postsError) {
+      console.error('[delete-account] Posts delete error:', postsError);
+    }
 
     // 2. ユーザーのいいねを削除
-    const { error: likesError, count: likesCount } = await adminSupabase.from('likes').delete().eq('user_id', user.id);
-    console.log('[delete-account] Likes deleted:', { error: likesError?.message, count: likesCount });
+    const { error: likesError } = await adminSupabase.from('likes').delete().eq('user_id', user.id);
+    if (likesError) {
+      console.error('[delete-account] Likes delete error:', likesError);
+    }
 
     // 3. ユーザープロフィールを削除
-    const { error: usersError, count: usersCount } = await adminSupabase.from('users').delete().eq('id', user.id);
-    console.log('[delete-account] Users profile deleted:', { error: usersError?.message, count: usersCount });
+    const { error: usersError } = await adminSupabase.from('users').delete().eq('id', user.id);
+    if (usersError) {
+      console.error('[delete-account] Users delete error:', usersError);
+    }
+
+    // 削除後の確認
+    const { count: postsCountAfter } = await adminSupabase.from('posts').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
+    const { count: likesCountAfter } = await adminSupabase.from('likes').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
+    const { data: userProfile } = await adminSupabase.from('users').select('id').eq('id', user.id).single();
+    console.log('[delete-account] After deletion:', { posts: postsCountAfter, likes: likesCountAfter, userProfileExists: !!userProfile });
 
     // 4. auth.usersからユーザーを削除（管理者権限が必要）
     console.log('[delete-account] Attempting to delete auth user:', user.id);
