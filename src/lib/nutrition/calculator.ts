@@ -128,9 +128,9 @@ export function calculateNutrition(input: CalculationInput): NutritionInfo {
   totalCalories += oilCalories;
   
   // 調理時間を決定
-  const baseTime = COOKING_TIME_BY_METHOD[method] || 10;
-  // 材料が多い場合は下処理時間を追加
-  const prepTime = Math.min(ingredients.length * 2, 10);
+  const baseTime = COOKING_TIME_BY_METHOD[method] || 8;
+  // 材料が多い場合は下処理時間を追加（最大5分まで）
+  const prepTime = Math.min(ingredients.length * 1, 5);
   const timeMinutes = baseTime + prepTime;
   
   // 1人前に換算
